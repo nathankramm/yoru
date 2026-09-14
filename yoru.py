@@ -37,6 +37,7 @@ import datetime
 import json
 import os
 import random
+import re
 import signal
 import subprocess
 import sys
@@ -728,7 +729,7 @@ class Pet:
 
     def mark_seen(self, tip):
         self.seen.add(tip_id(tip))
-        if len(self.seen) >= len(self.tips):
+        if len(self.seen) >= len(self.tips) - len(suppressed):
             self.seen.clear()
         save_json(SEEN, sorted(self.seen))
 
@@ -754,6 +755,9 @@ class Pet:
                 return None
             best = max(s for s, _ in scored)
             pool = [t for s, t in scored if s == best]
+        pool = [t for t in pool if tip_id(t) not in suppressed]
+        if not pool:
+            return None
         pool = [t for t in pool if tip_id(t) not in self.known] or pool
         fresh = [t for t in pool if tip_id(t) not in self.seen]
         tip = random.choice(fresh or pool)
@@ -879,6 +883,157 @@ def active_window():
         return "", ""
 
 
+# ---------------------------------------------------------------- verify ----
+# The manual is the source of truth for what a binding *means*; the running
+# compositor is the source of truth for whether it *exists*. A tip whose keys
+# have been unbound or never existed here is withheld, not rewritten — a
+# live description is a two-word label and can't stand in for a sentence.
+#
+# Only these topics carry Hyprland binds. tmux, Neovim, Ghostty, lazygit, the
+# file manager and the shell have their own keys that look the same and must
+# never be checked against the compositor.
+HYPR_TOPICS = {"windows", "workspaces", "panels", "capture", "clipboard",
+               "notifications", "style", "toggles", "reminders", "apps",
+               "herdr", "agents", "btop", "terminal"}
+MODBITS = {"SUPER": 64, "SHIFT": 1, "CTRL": 4, "ALT": 8}
+# Omarchy declares digits, minus/equal and the brackets by X keycode.
+KEYCODES = {str(10 + i): str((i + 1) % 10) for i in range(10)}
+KEYCODES.update({"20": "MINUS", "21": "EQUAL", "34": "BRACKETLEFT",
+                 "35": "BRACKETRIGHT"})
+# How the manual spells a key -> how hyprctl spells it.
+KEY_ALIASES = {
+    "PRINT SCREEN": "PRINT", "DEL": "DELETE", "ENTER": "RETURN",
+    "/": "SLASH", ",": "COMMA", ".": "PERIOD",
+    "[": "BRACKETLEFT", "]": "BRACKETRIGHT",
+    "LEFT MOUSE": "mouse:272", "RIGHT MOUSE": "mouse:273",
+    "MUTE": "XF86AudioMute", "PLAY": "XF86AudioPlay",
+    "BRIGHTNESS UP": "XF86MonBrightnessUp",
+    "BRIGHTNESS DOWN": "XF86MonBrightnessDown",
+}
+MENTION = re.compile(r"\b((?:Super|Ctrl|Alt|Shift)(?: \+ (?:Super|Ctrl|Alt|Shift))*"
+                     r" \+ [A-Za-z0-9/\[\],.]+)")
+suppressed = {}     # tip id -> why, refreshed alongside the theme poll
+
+
+def live_binds():
+    """{(modifiers, KEY): description} from the compositor, or None.
+
+    The text form, not `hyprctl -j binds`: JSON reports an empty key for
+    every bind declared by keycode — 59 of 226 here, including all the
+    workspace and resize keys — while the text form keeps "SUPER + code:10".
+    None means "don't know", and the caller must then suppress nothing.
+    """
+    try:
+        out = subprocess.run(["hyprctl", "binds"], capture_output=True,
+                             text=True, timeout=1).stdout
+    except Exception:
+        return None
+    binds = {}
+    for block in out.split("\n\n"):
+        f = dict((k.strip(), v.strip()) for k, v in
+                 (l.split(":", 1) for l in block.splitlines() if ":" in l))
+        if "modmask" not in f or "key" not in f:
+            continue
+        try:
+            mask = int(f["modmask"])
+        except ValueError:
+            continue
+        mods = frozenset(m for m, bit in MODBITS.items() if mask & bit)
+        key = re.sub(r"^(?:(?:SUPER|SHIFT|CTRL|ALT) \+ )+", "", f["key"])
+        if key.startswith("code:"):
+            key = KEYCODES.get(key[5:], key)
+        elif not key.startswith(("XF86", "mouse", "switch")):
+            key = key.upper()
+        binds[(mods, key)] = f.get("description", "")
+    return binds or None
+
+
+def _expand(expr):
+    """'1/2/3/4', '1-9', 'Arrow', 'Brightness Up/Down' -> hyprctl key names."""
+    e = expr.strip()
+    if e.lower() in ("arrow", "arrows"):
+        return ["LEFT", "RIGHT", "UP", "DOWN"]
+    if e.lower() == "scroll wheel":
+        return ["mouse_down", "mouse_up"]
+    m = re.match(r"^(\d)-(\d)$", e)
+    if m:
+        return [str(i) for i in range(int(m.group(1)), int(m.group(2)) + 1)]
+    if "/" in e and len(e) > 1:
+        parts = [p.strip() for p in e.split("/")]
+        if " " in parts[0] and " " not in parts[1]:   # "Brightness Up/Down"
+            head = parts[0].rsplit(" ", 1)[0]
+            parts = parts[:1] + [head + " " + p for p in parts[1:]]
+        return [k for p in parts for k in _expand(p)]
+    return [KEY_ALIASES.get(e.upper(), e.upper())]
+
+
+def parse_keys(keys):
+    """(modifiers, [KEY, ...]) for a Hyprland-shaped key string, else None."""
+    parts = [p.strip() for p in keys.split("+")]
+    mods = frozenset(p.upper() for p in parts if p.upper() in MODBITS)
+    rest = [p for p in parts if p.upper() not in MODBITS]
+    if len(rest) != 1 or not (mods or rest[0].upper() in KEY_ALIASES):
+        return None
+    return mods, _expand(rest[0])
+
+
+def _missing(binds, mods, keys):
+    """Which of a compound's members are unbound. A compound survives while
+    more than half of it exists — one unbound workspace shouldn't take the
+    whole "Super + 1/2/3/4" tip with it."""
+    gone = [k for k in keys if (mods, k) not in binds]
+    return gone if len(gone) * 2 >= len(keys) else []
+
+
+def verify_tips(tips, binds):
+    """{tip id: reason} for every tip whose keys aren't bound here."""
+    out = {}
+    for t in tips:
+        if t[0] not in HYPR_TOPICS:
+            continue
+        parsed = parse_keys(t[2])
+        if parsed is None:
+            continue
+        mods, keys = parsed
+        gone = _missing(binds, mods, keys)
+        if gone:
+            out[tip_id(t)] = "%s: %s not bound" % (t[2], ", ".join(gone))
+            continue
+        # Bindings the sentence itself teaches. The manual abbreviates —
+        # "Alt + K for tmux" under a Super + K heading means Super + Alt + K
+        # — so a mention gets the heading's modifiers before it counts as gone.
+        for m in MENTION.findall(t[3]):
+            mm, mk = parse_keys(m)
+            if _missing(binds, mm, mk) and _missing(binds, mm | mods, mk):
+                out[tip_id(t)] = "%s: mentions %s, not bound" % (t[2], m)
+                break
+    return out
+
+
+def refresh_suppressed(tips):
+    binds = live_binds()
+    if binds is None:
+        return                      # can't see the compositor: change nothing
+    suppressed.clear()
+    suppressed.update(verify_tips(tips, binds))
+
+
+def cmd_verify_report(tips):
+    binds = live_binds()
+    if binds is None:
+        print("hyprctl binds unavailable — nothing would be suppressed.")
+        return 0
+    scoped = [t for t in tips if t[0] in HYPR_TOPICS and parse_keys(t[2])]
+    gone = verify_tips(tips, binds)
+    for t in tips:
+        if tip_id(t) in gone:
+            print("  %-13s %s" % (t[0], gone[tip_id(t)]))
+    print("\n%d live key combos; %d of %d Hyprland-scope tips suppressed; "
+          "%d other tips never checked."
+          % (len(binds), len(gone), len(scoped), len(tips) - len(scoped)))
+    return 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="Yoru, a Clippy for Omarchy.")
     p.add_argument("--scale", type=int, default=4, help="pixel size (default 4)")
@@ -907,6 +1062,8 @@ def main(argv=None):
                    choices=["background", "bottom", "top", "overlay"])
     p.add_argument("--ask", metavar="QUERY", help="search his knowledge and exit")
     p.add_argument("--list", action="store_true", help="print everything he knows and exit")
+    p.add_argument("--verify-report", action="store_true",
+                   help="show which tips this machine's bindings rule out, and exit")
     p.add_argument("--forget-known", action="store_true",
                    help="un-retire every tip you've marked as known")
     opts = p.parse_args(argv)
@@ -930,7 +1087,10 @@ def main(argv=None):
         return 1
     if opts.quiet:
         opts.interval = 1e9
+    if opts.verify_report:
+        return cmd_verify_report(tips)
 
+    refresh_suppressed(tips)
     return run(opts, tips)
 
 
@@ -1176,11 +1336,13 @@ def build_app(opts, tips):
             save_json(STATE, state)
 
         def poll_theme(self):
-            """Repaint when the Omarchy theme changes, silently."""
+            """Repaint when the Omarchy theme changes, silently. Bindings are
+            re-read on the same beat, so a rebind lands without a restart."""
             stamp = theme_stamp()
             if stamp != self._theme_stamp:
                 self._theme_stamp = stamp
                 apply_theme()
+            refresh_suppressed(self.pet.tips)
             return True
 
         # -- context -----------------------------------------------------

@@ -127,6 +127,7 @@ yoru --forget-known       # un-retire everything
 | `--no-context` | | ignore the focused window |
 | `--no-theme` | | keep the built-in palette |
 | `--start-hidden` | | begin off screen |
+| `--verify-report` | | list the tips this machine's bindings rule out, and exit |
 
 The keybind sends `SIGUSR1` and the process keeps running, so his position,
 snooze state and which tips he's seen all survive.
@@ -149,6 +150,26 @@ separately from the terminal itself:
 
 At most two contextual tips per app per day, and never within 90 seconds of him
 last speaking.
+
+---
+
+## Your bindings
+
+The manual says what a binding *means*; only the running compositor knows
+whether it *exists*. At startup, and again every four seconds, he reads
+`hyprctl binds` and checks every tip whose keys are a Hyprland binding —
+windows, workspaces, panels, capture, the app launchers — against what is
+actually bound. A tip whose keys you've unbound, or that this install never
+had, is withheld, so he never teaches you a binding you've rebound away.
+
+Only tips in Hyprland topics are checked. tmux, Neovim, Ghostty, lazygit and
+shell keys look the same but belong to their own programs and are left alone,
+as are your own tips. If `hyprctl` is missing or its output can't be read,
+nothing is withheld.
+
+`yoru --verify-report` prints exactly what he's holding back and why.
+`--list` and `--ask` still show everything — suppression only applies to what
+he volunteers.
 
 ---
 
@@ -185,10 +206,11 @@ A line with no `|` becomes idle chatter.
 
 The next versions are about making him yours rather than generic.
 
-- **Reconcile against your real keybindings.** `omarchy menu keybindings --print`
-  emits every *current* binding, including your `o.bind` additions,
-  `o.rebind` replacements and `hl.unbind` removals. Teaching you a default
-  you've overridden is worse than saying nothing.
+- **Catch rebinds, not just unbinds.** Checking that a key exists can't tell
+  that `Super + S` still exists but now opens your scratch notes instead of the
+  scratchpad. That needs the live description compared against Omarchy's stock
+  one for the same key, which means reading the defaults under
+  `/usr/share/omarchy/default/hypr/bindings/`.
 - **Drop what you haven't installed.** A `pacman -Qq` check at startup should
   retire whole topics — no Ghostty tips on a Foot machine.
 - **Weight by what you actually use.** He already watches window focus; over

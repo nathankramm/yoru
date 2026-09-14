@@ -2,11 +2,13 @@
 
 ## Adding tips
 
-Every tip in `KNOWLEDGE` must be traceable to the Omarchy manual or a shipped
-config file in the [`quattro` branch](https://github.com/omacom/omarchy). Not a
-blog post, not a cheat sheet, not memory — several widely-circulated Omarchy
-cheat sheets have `Super + Space` and `Super + Alt + Space` backwards, and the
-v3 manual at learn.omacom.io is now legacy.
+Every tip in `KNOWLEDGE` must be traceable to the installed Omarchy release
+under `/usr/share/omarchy` — a script in `bin/`, a Lua file under
+`default/hypr/`, a shell function, the menu JSON. Not the manual, not the
+GitHub branch, not a blog post, not memory: the manual's hotkeys table lists
+`Super + Q` to close a window and it isn't bound; the branch runs ahead of the
+packaged release; several widely-circulated cheat sheets have `Super + Space`
+and `Super + Alt + Space` backwards. `tools/README.md` says where to look.
 
 The format is `(topic, match, keys, text)`:
 

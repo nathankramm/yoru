@@ -26,6 +26,7 @@ Run
     python3 yoru.py --corner bl --scale 5 --interval 240 --topics nvim,tmux
     python3 yoru.py --ask screenshot        # search his knowledge, print, exit
     python3 yoru.py --list                  # everything he knows
+    python3 yoru.py --debug 2>yoru.log      # why he did what he did
 
 Your own tips
     ~/.config/yoru/tips.txt — one per line, "Super + Y | what it does".
@@ -38,15 +39,32 @@ import json
 import os
 import random
 import re
+import shutil
 import signal
 import subprocess
 import sys
+import tempfile
+import time
 
 CONFIG = os.path.expanduser("~/.config/yoru")
 STATE = os.path.join(CONFIG, "state.json")
 SEEN = os.path.join(CONFIG, "seen.json")
 KNOWN = os.path.join(CONFIG, "known.json")
 USER_TIPS = os.path.join(CONFIG, "tips.txt")
+
+# --debug. Every decision he makes goes to stderr with a timestamp, so a
+# stranger's "he said the wrong thing" arrives with the why attached. The
+# message is only formatted once the flag has been checked, so an argument
+# list costs nothing when it's off; anything dearer than that sits behind
+# its own `if DEBUG:`.
+DEBUG = False
+
+
+def debug(msg, *args):
+    if DEBUG:
+        stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print("yoru %s %s" % (stamp, msg % args if args else msg),
+              file=sys.stderr, flush=True)
 
 # Hidden is not dead. SIGUSR1 flips this and the process carries on stepping,
 # so his spot, his snooze and what he has and hasn't said all survive a
@@ -58,6 +76,7 @@ visible = True
 def toggle_visible(*_):
     global visible
     visible = not visible
+    debug("visible: %s (SIGUSR1)", "shown" if visible else "hidden")
     return True                 # keep the signal watch installed
 
 # ---------------------------------------------------------------- sprite ----
@@ -218,6 +237,15 @@ def apply_theme():
     return True
 
 
+def _theme_label():
+    """The theme's name, for --debug only."""
+    try:
+        with open(THEME_NAME) as fh:
+            return fh.read().strip() or "?"
+    except OSError:
+        return "?"
+
+
 def theme_stamp():
     """Cheap change-detector for the active theme."""
     try:
@@ -313,15 +341,14 @@ KNOWLEDGE = [
     ("windows", None, "Super + K", "Every keybinding at once. Alt + K for tmux, Ctrl + K for Herdr. Nobody memorises all of them."),
     ("windows", None, "Super + Space", "The Omarchy menu. Almost everything starts here, which is the point of it."),
     ("windows", None, "Super + Alt + Space", "The apps menu, for when you already know what you want."),
-    ("windows", None, "Super + Escape", "Suspend, restart, relaunch Hyprland. The third one fixes more than you'd think."),
+    ("windows", None, "Super + Escape", "Lock, suspend, hibernate, log out, reboot, shut down. Screensaver, if you want a show."),
     ("windows", None, "Super + Ctrl + L", "Lock the screen."),
-    ("windows", None, "Super + W", "Close the window. Super + Q does the same, which suggests someone was hedging."),
+    ("windows", None, "Super + W", "Close the window. No confirmation dialog. There was never going to be one."),
     ("windows", None, "Ctrl + Alt + Del", "Closes every window. The nuclear option, kept where you can reach it."),
     ("windows", None, "Super + T", "Toggle a window between tiling and floating. Floating is a temporary condition."),
     ("windows", None, "Super + J", "Toggle the split between horizontal and vertical."),
     ("windows", None, "Super + F", "Full screen. Super + Alt + F goes full width, which is the one you actually want."),
     ("windows", None, "Super + Ctrl + F", "Full screen inside the window's own frame."),
-    ("windows", None, "Super + Ctrl + Alt + F", "Full screen desktop — bar gone, gaps gone. Nothing left but the work."),
     ("windows", None, "Super + L", "Toggle between the dwindle and scrolling layouts."),
     ("windows", None, "Super + P", "Pseudo window style. The window gets its natural size instead of being stretched thin."),
     ("windows", None, "Super + O", "Pop a window out sticky and floating. It follows you everywhere, like me."),
@@ -383,7 +410,7 @@ KNOWLEDGE = [
     ("style", None, "Super + Shift + Space", "Toggle the top bar. Nothing up there was ever that urgent."),
     ("style", None, "~/.config/omarchy/backgrounds", "Extras go in the subfolder named for the theme, like /nord."),
     ("style", None, "A theme", "Restyles the desktop, terminal, neovim, btop, Chromium and the shell. All of it, at once."),
-    ("style", None, "Obsidian", "The one holdout — set the Omarchy theme by hand in Appearance > Themes."),
+    ("style", None, "Obsidian", "Follows the theme too — pick Omarchy once in Appearance > Themes and it stays current."),
 
     # ---------------------------------------------------------- toggles ----
     ("toggles", None, "Super + Ctrl + N", "Nightlight. It is later than you think."),
@@ -395,7 +422,7 @@ KNOWLEDGE = [
 
     # -------------------------------------------------------- reminders ----
     ("reminders", None, "Super + Ctrl + R", "Set a reminder. Ctrl + Alt + R sees all, Ctrl + Shift + R clears."),
-    ("reminders", None, "Super + Ctrl + Alt + T", "Time as a notification. B battery, W weather."),
+    ("reminders", None, "Super + Ctrl + Alt + T", "Time as a notification. B is battery. W toggles the weather panel."),
 
     # ------------------------------------------------------------- apps ----
     ("apps", None, "Super + Return", "Terminal. Super + Alt + Return opens it in tmux, which is where you'll end up anyway."),
@@ -417,7 +444,7 @@ KNOWLEDGE = [
     ("setup", None, "Install > Package", "Anything in Arch. Install > AUR when it isn't in the main repos."),
     ("setup", None, "Install > TUI", "Give a terminal program a name and an icon and it's an app. That's all an app ever was."),
     ("setup", None, "Install > Web App", "A URL with a name and an icon. Most desktop apps are this wearing a costume."),
-    ("setup", None, "Setup > Defaults", "Editor, terminal, agent. Chosen once, obeyed everywhere. Strong defaults are a kindness."),
+    ("setup", None, "Setup > Defaults", "Editor, terminal, browser, agent. Chosen once, obeyed everywhere. Defaults are a kindness."),
     ("setup", None, "Setup > Input", "Keyboard layout, mouse, trackpad — or ~/.config/hypr/input.lua."),
     ("setup", None, "Setup > Direct Boot", "Skips the Limine menu and boots straight to the decryption screen."),
     ("setup", None, "Dual boot", "Quattro installs into free space beside Windows, LUKS and all."),
@@ -427,7 +454,7 @@ KNOWLEDGE = [
     ("cli", TERM, "omarchy update", "Packages, snapshot and migrations in one move. The snapshot is the part that matters."),
     ("cli", TERM, "omarchy theme list", "Then omarchy theme set <name>. omarchy font list does fonts."),
     ("cli", TERM, "omarchy commands --all", "Every subcommand there is. --json if something else is reading."),
-    ("cli", TERM, "omarchy debug", "The output to bring when you go asking for help. Bring it before the question."),
+    ("cli", TERM, "omarchy-debug", "One log with all a helper needs. --print to read it. Hyphenated; the spaced form fails."),
     ("cli", TERM, "omarchy-restart-xcompose", "Run it after editing ~/.XCompose or nothing changes."),
 
     # --------------------------------------------------- updates/rescue ----
@@ -438,7 +465,7 @@ KNOWLEDGE = [
     ("updates", None, "Limine", "Snapshots need it. Default since 2.0, absent on GRUB or systemd-boot."),
     ("updates", TERM, "omarchy-reinstall", "Last resort. Default configs and packages back. No shame in it."),
     ("updates", None, "Update > Config", "Reverts the configs you've made a mess of, without the full reinstall."),
-    ("updates", None, "#omarchy-help", "The Discord channel. Bring your omarchy-debug output."),
+    ("updates", None, "#omarchy-help", "The Discord, via omarchy.org/discord. Bring your omarchy-debug output, not vibes."),
 
     # ------------------------------------------------------------ fixes ----
     ("fixes", None, "Update > Hardware", "Reload Wi-Fi, Bluetooth, Audio or Trackpad before you reboot."),
@@ -451,7 +478,7 @@ KNOWLEDGE = [
     # ------------------------------------------------------------ paths ----
     ("config", None, "~/.config", "Your files, for your changes. This half of the system is yours and always will be."),
     ("config", None, "/usr/share/omarchy", "Omarchy's own files. Override in ~/.config. Look, don't touch."),
-    ("config", None, "~/.config/hypr/bindings.lua", "Your keybindings. o.bind adds one, o.rebind replaces a default."),
+    ("config", None, "~/.config/hypr/bindings.lua", "Your keybindings. o.bind adds one; hl.unbind a default first if you're replacing it."),
     ("config", None, "~/.config/hypr/monitors.lua", "Monitors, resolution and position. looknfeel.lua does gaps and borders."),
     ("config", None, "~/.config/hypr/autostart.lua", "o.launch_on_start(\"thing\") starts it with your session."),
     ("config", None, "~/.config/omarchy/shell.json", "Bar position, widgets, and the screensaver and idle timings."),
@@ -497,19 +524,18 @@ KNOWLEDGE = [
 
     # --------------------------------------------------------- terminal ----
     ("terminal", ("foot",), "Foot", "The default terminal. No native tabs or splits, by design — that's tmux's job."),
-    ("terminal", None, "Install > Terminal", "Alacritty, Ghostty or Kitty, if you want native tabs and splits."),
+    ("terminal", None, "Install > Terminal", "Foot, Alacritty, Ghostty or Kitty. The last three have native tabs and splits."),
     ("terminal", None, "Setup > Defaults > Terminal", "Switches between the ones you've installed. Super + Return follows."),
 
     # ----------------------------------------------------------- agents ----
     ("agents", AGENT, "Super + Shift + Ctrl + A", "Launches your default agent in its own window, starting in ~/Work."),
-    ("agents", AGENT, "omarchy default agent", "Nine are pre-wired. Or Setup > Defaults > Agent in the menu."),
+    ("agents", AGENT, "omarchy default agent", "Thirteen are pre-wired. Or Setup > Defaults > Agent in the menu."),
     ("agents", AGENT, "a", "The default agent, inline. c opencode, cx Claude Code, cy Codex. Two letters, no ceremony."),
     ("agents", AGENT, "omarchy agent prompt", "Sends it straight into a task, unattended. Mean what you type."),
-    ("agents", AGENT, "ori claude", "Runs another harness across OpenRouter's catalogue. ori code is its own."),
     ("agents", AGENT, "omarchy-mise-install", "Wraps any other CLI as a lazy-loaded stub, like the agents are."),
     ("agents", AGENT, "The agents icon", "Appears once you've used one. Left click for spend, right to launch."),
     ("agents", None, "A crash notification", "Click it and your agent is handed the core dump to explain."),
-    ("agents", AGENT, "Agent skills", "Omarchy ships one for tailoring the system, symlinked into each harness."),
+    ("agents", AGENT, "Agent skills", "Omarchy ships two — omarchy and diagnose-crash — symlinked into each harness."),
     ("agents", AGENT, "Agent theming", "Claude Code, Pi, OpenCode and Hermes follow your Omarchy theme."),
     ("agents", AGENT, "LM Studio", "That or Ollama, for running open-weight models on this machine."),
 
@@ -527,7 +553,7 @@ KNOWLEDGE = [
     ("neovim", NVIM, "Shift + H", "Left through the open tabs. Shift + L right, Space B D closes."),
     ("neovim", NVIM, "Space B O", "Close every tab but this one. Space U W toggles soft wrap."),
     ("neovim", NVIM, "?", "In the file tree, lists every command it has."),
-    ("neovim", NVIM, "Ctrl + Left/Right arrow", "Changes the sidebar's width."),
+    ("neovim", NVIM, "Ctrl + Left/Right arrow", "Narrows or widens the focused window, two columns a press. The sidebar, or any split."),
     ("neovim", TERM, "n", "The alias for nvim. n myfile.txt opens just that one."),
     ("neovim", TERM, "sudoedit", "Edit root-owned files with all your plugins still loaded."),
     ("neovim", NVIM, "lazyvim.org/keymaps", "Everything LazyVim binds, on one page. Bookmark it, you'll be back."),
@@ -656,10 +682,45 @@ def _load_set(path):
 
 
 def save_json(path, data):
+    """Whole file or no file. The JSON goes to a sibling temp file and is
+    renamed into place, because state.json is rewritten every few minutes
+    and a crash mid-write would otherwise leave a truncated file that loads
+    as {} — his spot, the intro flag and every retired tip gone without a
+    word. A stale temp file is what an unclean shutdown leaves behind, and
+    is swept on the next write."""
     try:
         os.makedirs(CONFIG, exist_ok=True)
-        with open(path, "w") as fh:
-            json.dump(data, fh)
+        d, name = os.path.split(path)
+        d = d or "."
+        for stale in os.listdir(d):
+            if stale.startswith("." + name + ".") and stale.endswith(".tmp"):
+                try:
+                    if os.path.getmtime(os.path.join(d, stale)) < time.time() - 60:
+                        os.unlink(os.path.join(d, stale))
+                except OSError:
+                    pass
+        fd, tmp = tempfile.mkstemp(dir=d, prefix="." + name + ".", suffix=".tmp")
+        try:
+            # mkstemp is 0600; keep whatever mode the file had, or the
+            # umask's usual for a new one, so nothing changes but the safety.
+            try:
+                mode = os.stat(path).st_mode & 0o777
+            except OSError:
+                umask = os.umask(0)
+                os.umask(umask)
+                mode = 0o666 & ~umask
+            os.chmod(tmp, mode)
+            with os.fdopen(fd, "w") as fh:
+                json.dump(data, fh)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
     except OSError:
         pass
 
@@ -773,6 +834,9 @@ class Pet:
 
         self.head = self.text = None
         self.text_until = 0.0
+        # Last values --debug reported, so it only speaks on a change.
+        self._last_pose = self.pose
+        self._was_present = self.present(0.0)
 
     # -- placement ---------------------------------------------------------
     @property
@@ -823,7 +887,7 @@ class Pet:
             self.seen.clear()
         save_json(SEEN, sorted(self.seen))
 
-    def pick(self, cls="", context=None):
+    def pick(self, cls="", context=None, why="ambient"):
         """Prefer an unseen tip, and the most specific context match.
 
         A tip that matches the window *title* (nvim, lazygit, btop running
@@ -842,21 +906,26 @@ class Pet:
                 elif any(m in cls for m in t[1]):
                     scored.append((1, t))
             if not scored:
+                debug("tip (%s): nothing matches %r", why, cls)
                 return None
             best = max(s for s, _ in scored)
             pool = [t for s, t in scored if s == best]
         pool = [t for t in pool if tip_id(t) not in suppressed]
         if not pool:
+            debug("tip (%s): every candidate is suppressed", why)
             return None
         pool = [t for t in pool if tip_id(t) not in self.known] or pool
         fresh = [t for t in pool if tip_id(t) not in self.seen]
         tip = random.choice(fresh or pool)
+        debug("tip (%s): %s — %d unseen of %d candidates%s", why, tip_id(tip),
+              len(fresh), len(pool), (" for %r" % cls) if context is not None else "")
         self.mark_seen(tip)
         self.current = tip
         return tip
 
     def mark_known(self, tip):
         self.known.add(tip_id(tip))
+        debug("known: retired %s (%d retired)", tip_id(tip), len(self.known))
         save_json(KNOWN, sorted(self.known))
 
     def say(self, head, text, secs, now):
@@ -882,20 +951,26 @@ class Pet:
         progress = min(1.0, self.shown / max(1, len(self.tips)))
         return 0.15 + 0.25 * progress
 
-    def next_ambient(self):
+    def next_ambient(self, why="ambient"):
         if random.random() < self.chatter_share():
             self.current = None
             hour = datetime.datetime.now().hour
+            debug("chatter (%s): share %.2f after %d tips shown", why,
+                  self.chatter_share(), self.shown)
             if (hour >= 23 or hour < 5) and random.random() < 0.5:
                 return None, self.late.next()
             return None, self.chatter.next()
-        t = self.pick()
+        t = self.pick(why=why)
+        if not t:
+            debug("chatter (%s): no tip available", why)
         return (t[2], t[3]) if t else (None, self.chatter.next())
 
     # -- motion ------------------------------------------------------------
     def step(self, dt, now, width, height):
         if not self.placed:
             self.place(width, height)
+        if DEBUG:
+            self._trace(now)
 
         self.blink -= dt
         self.next_blink -= dt
@@ -937,6 +1012,9 @@ class Pet:
             if self.snoozing(now) or not self.present(now) or not visible:
                 # Say nothing and, crucially, pick nothing — an unread tip
                 # must not be marked seen. Just look again shortly.
+                debug("ambient: held (%s), again in 30s",
+                      "snoozing" if self.snoozing(now)
+                      else "away" if not self.present(now) else "hidden")
                 self.next_talk = 30.0
             else:
                 self.next_talk = random.uniform(self.interval * 0.6,
@@ -997,6 +1075,24 @@ class Pet:
         self.dir = 1 if delta > 0 else -1
         self.x += self.dir * self.speed * dt
         self.dist += self.speed * dt
+
+    def _trace(self, now):
+        """--debug only: report presence and pose the frame after they change."""
+        here = self.present(now)
+        if here != self._was_present:
+            self._was_present = here
+            debug("presence: %s", "here" if here
+                  else "away (%.0fs without activity)" % self.idle_after)
+        if self.pose != self._last_pose:
+            why = ""
+            if self.pose == "graze":
+                why = " for %.0fs" % self.graze_for
+            elif self.text:
+                why = " (speaking)"
+            elif self.mode != "home":
+                why = " (%s)" % self.mode
+            debug("pose: %s -> %s%s", self._last_pose, self.pose, why)
+            self._last_pose = self.pose
 
     def bounding(self):
         return self.mode in ("out", "back") and self.pause <= 0 and self.speed > 120
@@ -1162,9 +1258,25 @@ def verify_tips(tips, binds):
 def refresh_suppressed(tips):
     binds = live_binds()
     if binds is None:
+        if not refresh_suppressed.blind:
+            debug("suppression: hyprctl binds unavailable, keeping %d withheld",
+                  len(suppressed))
+        refresh_suppressed.blind = True
         return                      # can't see the compositor: change nothing
+    refresh_suppressed.blind = False
+    fresh = verify_tips(tips, binds)
+    if DEBUG and fresh != suppressed:
+        debug("suppression: %d of %d tips withheld against %d live binds",
+              len(fresh), len(tips), len(binds))
+        for k in sorted(set(fresh) - set(suppressed)):
+            debug("suppression: + %s", fresh[k])
+        for k in sorted(set(suppressed) - set(fresh)):
+            debug("suppression: - %s (bound again)", k)
     suppressed.clear()
-    suppressed.update(verify_tips(tips, binds))
+    suppressed.update(fresh)
+
+
+refresh_suppressed.blind = False    # last poll couldn't see the compositor
 
 
 def cmd_verify_report(tips):
@@ -1215,7 +1327,12 @@ def main(argv=None):
                    help="show which tips this machine's bindings rule out, and exit")
     p.add_argument("--forget-known", action="store_true",
                    help="un-retire every tip you've marked as known")
+    p.add_argument("--debug", action="store_true",
+                   help="log every decision to stderr, for bug reports")
     opts = p.parse_args(argv)
+
+    global DEBUG
+    DEBUG = opts.debug
 
     load_user_tips()
     topics = {t.strip() for t in opts.topics.split(",") if t.strip()}
@@ -1286,8 +1403,21 @@ def _load_gtk():
         except (ValueError, ImportError):
             LayerShell = None
 
+    # GLib.unix_signal_add now lives in the GLibUnix namespace and PyGObject
+    # warns on the old spelling. Older PyGObject has no GLibUnix typelib at
+    # all, so the old call stays as the fallback rather than being swapped.
+    GLibUnix = None
+    try:
+        gi.require_version("GLibUnix", "2.0")
+        from gi.repository import GLibUnix as _GU
+        if hasattr(_GU, "signal_add"):
+            GLibUnix = _GU
+    except (ValueError, ImportError):
+        pass
+
     globals().update(Gtk=Gtk, GLib=GLib, Gdk=Gdk, Pango=Pango,
-                     PangoCairo=PangoCairo, cairo=cairo, LayerShell=LayerShell)
+                     PangoCairo=PangoCairo, cairo=cairo, LayerShell=LayerShell,
+                     GLibUnix=GLibUnix)
 
 
 def draw_sprite(cr, pet, oy):
@@ -1422,7 +1552,10 @@ def build_app(opts, tips):
             area.add_controller(drag)
 
             self.win, self.area = win, area
-            apply_theme()
+            themed = apply_theme()
+            if DEBUG:
+                debug("theme: %s at start (%s)", _theme_label(),
+                      "applied" if themed else "unreadable, built-in palette")
             self._theme_stamp = theme_stamp()
             win.present()
             GLib.timeout_add(33, self.tick)
@@ -1439,14 +1572,16 @@ def build_app(opts, tips):
             button = gesture.get_current_button()
             pet = self.pet
             if button == 3:                                   # next tip
-                head, text = pet.next_ambient()
+                head, text = pet.next_ambient(why="asked")
                 pet.say(head, text, 9.0, now)
             elif button == 2:                                 # snooze
                 if pet.snoozing(now):
                     pet.snooze_until = 0.0
+                    debug("snooze: off (middle click)")
                     pet.say(None, "Back. What did I miss?", 3.0, now)
                 else:
                     pet.snooze_until = now + 3600
+                    debug("snooze: on for 3600s (middle click)")
                     pet.say(None, "Quiet for an hour. Middle click to undo.",
                             3.0, now)
 
@@ -1484,6 +1619,7 @@ def build_app(opts, tips):
             pet.dir = -1 if pet.home_x > self.area.get_width() / 2 else 1
             state = read_state()
             state.update(x=round(pet.home_x), y=round(pet.home_y))
+            debug("moved: home is now (%d, %d), saved", state["x"], state["y"])
             save_json(STATE, state)
 
         def poll_theme(self):
@@ -1492,7 +1628,10 @@ def build_app(opts, tips):
             stamp = theme_stamp()
             if stamp != self._theme_stamp:
                 self._theme_stamp = stamp
-                apply_theme()
+                themed = apply_theme()
+                if DEBUG:
+                    debug("theme: reloaded %s (%s)", _theme_label(),
+                          "applied" if themed else "unreadable, palette kept")
             refresh_suppressed(self.pet.tips)
             return True
 
@@ -1526,13 +1665,17 @@ def build_app(opts, tips):
             if not cls or cls == self.ctx_cls:
                 return True
             self.ctx_cls = cls
-            if (pet.snoozing(now)
-                    or not pet.present(now)
-                    or not visible
-                    or now - pet.last_spoke < opts.cooldown
-                    or self.ctx_offers.get(cls, 0) >= 2):
+            held = ("snoozing" if pet.snoozing(now)
+                    else "away" if not pet.present(now)
+                    else "hidden" if not visible
+                    else "cooldown, %.0fs left" % (opts.cooldown - (now - pet.last_spoke))
+                    if now - pet.last_spoke < opts.cooldown
+                    else "daily cap" if self.ctx_offers.get(cls, 0) >= 2
+                    else None)
+            if held:
+                debug("context %r: held (%s)", cls, held)
                 return True
-            tip = pet.pick(cls=cls, context=full)
+            tip = pet.pick(cls=cls, context=full, why="contextual")
             if tip:
                 pet.say_tip(tip, 9.0, now)
                 self.ctx_offers[cls] = self.ctx_offers.get(cls, 0) + 1
@@ -1545,6 +1688,7 @@ def build_app(opts, tips):
                 return True     # try again once he is on screen
             now = GLib.get_monotonic_time() / 1e6
             self.pet.saw_activity(now)
+            debug("intro: first run, saying hello")
             self.pet.say("Yoru",
                          "I know the Omarchy manual. Right click for a tip, "
                          "left click one to say you already know it and retire "
@@ -1597,9 +1741,24 @@ def run(opts, tips):
     global visible
     visible = not opts.start_hidden
     _load_gtk()
+    if DEBUG:
+        st = read_state()
+        debug("start: yoru %s | python %s | gtk %d.%d.%d | layer-shell %s | "
+              "hyprctl %s | signals via %s",
+              " ".join(sys.argv[1:]), sys.version.split()[0],
+              Gtk.get_major_version(), Gtk.get_minor_version(),
+              Gtk.get_micro_version(),
+              "yes" if LayerShell else "no",
+              "yes" if shutil.which("hyprctl") else "no",
+              "GLibUnix" if GLibUnix else "GLib (deprecated)")
+        debug("start: %d tips | %d seen, %d retired, %d shown | introduced %s "
+              "| home %s | %s", len(tips), len(load_seen()), len(load_known()),
+              st.get("shown", 0), bool(st.get("introduced")),
+              load_home() or "default %s" % opts.corner, CONFIG)
     # Dispatched from the main loop, not from inside the signal handler, so
     # the flip can never land in the middle of a frame.
-    GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1, toggle_visible)
+    add = GLibUnix.signal_add if GLibUnix else GLib.unix_signal_add
+    add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1, toggle_visible)
     return build_app(opts, tips).run([])
 
 

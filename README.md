@@ -3,7 +3,7 @@
 > *It looks like you're using a tiling window manager. Would you like help with that?*
 
 A pixel deer lives in the corner of your screen and quietly teaches you
-Omarchy. He knows 190 things from the manual, notices which app you're in,
+Omarchy. He knows 188 things about it, notices which app you're in,
 follows your theme, and — unlike his spiritual ancestor — shuts up when you
 tell him to.
 
@@ -59,8 +59,11 @@ The one thing the research said to keep: humour. Agents that joked were rated
 **This is the base build.** Yoru knows stock Omarchy 4 (Quattro) — the desktop,
 the CLI, the coding agents, the shell tools and functions, tmux, Herdr, Foot,
 Neovim/LazyVim, lazygit, lazydocker, btop, Nautilus, browsers, updates and
-snapshots. Everything he says was checked against the manual in the
-[`quattro` branch of the Omarchy repo][omarchy], not against a search engine.
+snapshots. Everything he says was checked against the installed release under
+`/usr/share/omarchy` — its scripts, its Lua, its menu — not against the manual
+or a search engine. The manual's hotkeys table lists `Super + Q` to close a
+window; it isn't bound. See [`tools/`](tools/README.md) for how the tips are
+verified and how to redo it when a new version lands.
 
 He does **not** yet know *your* Omarchy. He checks that a binding still exists
 before teaching it (see [Your bindings](#your-bindings)), but he'll still teach
@@ -108,7 +111,7 @@ o.launch_on_start("python3 /home/nathan/.local/bin/yoru")
 From the terminal, no GUI involved:
 
 ```bash
-yoru --ask screenshot     # search all 190 tips
+yoru --ask screenshot     # search all 188 tips
 yoru --list               # everything, grouped by topic
 yoru --forget-known       # un-retire everything
 ```
@@ -129,6 +132,7 @@ yoru --forget-known       # un-retire everything
 | `--no-theme` | | keep the built-in palette |
 | `--start-hidden` | | begin off screen |
 | `--verify-report` | | list the tips this machine's bindings rule out, and exit |
+| `--debug` | | log every decision to stderr with a timestamp — attach it to a bug report |
 
 The keybind sends `SIGUSR1` and the process keeps running, so his position,
 snooze state and which tips he's seen all survive.
@@ -247,7 +251,7 @@ precisely the predatory quality that made Clippy hated.
 
 ## Credits
 
-- The [Omarchy manual][omarchy] by DHH and contributors — every tip is traced to it
+- [Omarchy][omarchy] by DHH and contributors — every tip is traced to its shipped files
 - Luke Swartz, [*Why People Hate the Paperclip*][swartz], Stanford, 2003
 - [gtk4-layer-shell][gls] by William Wold
 - Clippit, designed by Kevan Atteberry, 1997

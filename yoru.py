@@ -37,6 +37,7 @@ import datetime
 import json
 import os
 import random
+import signal
 import subprocess
 import sys
 
@@ -45,6 +46,18 @@ STATE = os.path.join(CONFIG, "state.json")
 SEEN = os.path.join(CONFIG, "seen.json")
 KNOWN = os.path.join(CONFIG, "known.json")
 USER_TIPS = os.path.join(CONFIG, "tips.txt")
+
+# Hidden is not dead. SIGUSR1 flips this and the process carries on stepping,
+# so his spot, his snooze and what he has and hasn't said all survive a
+# "get out of the way for a minute". Compare pkill, which would reset all
+# of it and replay the intro.
+visible = True
+
+
+def toggle_visible(*_):
+    global visible
+    visible = not visible
+    return True                 # keep the signal watch installed
 
 # ---------------------------------------------------------------- sprite ----
 # 24x24. Rows 0-17 come from this map; legs are animated in code.
@@ -784,7 +797,7 @@ class Pet:
 
         self.next_talk -= dt
         if self.next_talk <= 0:
-            if self.snoozing(now) or not self.present(now):
+            if self.snoozing(now) or not self.present(now) or not visible:
                 # Say nothing and, crucially, pick nothing — an unread tip
                 # must not be marked seen. Just look again shortly.
                 self.next_talk = 30.0
@@ -888,6 +901,8 @@ def main(argv=None):
                    help="ignore the focused window entirely")
     p.add_argument("--quiet", action="store_true",
                    help="no ambient tips; only when asked or on context")
+    p.add_argument("--start-hidden", action="store_true",
+                   help="begin off screen; SIGUSR1 toggles him")
     p.add_argument("--layer", default="overlay",
                    choices=["background", "bottom", "top", "overlay"])
     p.add_argument("--ask", metavar="QUERY", help="search his knowledge and exit")
@@ -1200,6 +1215,7 @@ def build_app(opts, tips):
             self.ctx_cls = cls
             if (pet.snoozing(now)
                     or not pet.present(now)
+                    or not visible
                     or now - pet.last_spoke < opts.cooldown
                     or self.ctx_offers.get(cls, 0) >= 2):
                 return True
@@ -1212,6 +1228,8 @@ def build_app(opts, tips):
         def intro(self):
             """Say hello once, ever — right click is his best feature and
             nothing else advertises it."""
+            if not visible:
+                return True     # try again once he is on screen
             now = GLib.get_monotonic_time() / 1e6
             self.pet.saw_activity(now)
             self.pet.say("Yoru",
@@ -1234,9 +1252,12 @@ def build_app(opts, tips):
                           self.area.get_height() or 1080)
             surface = self.win.get_surface()
             if surface is not None:
-                surface.set_input_region(cairo.Region(cairo.RectangleInt(
+                # Hidden means untouchable too: an empty region hands every
+                # click to whatever is underneath, not to an invisible deer.
+                region = cairo.Region(cairo.RectangleInt(
                     int(self.pet.x), int(self.pet.y),
-                    int(self.pet.w), int(self.pet.h))))
+                    int(self.pet.w), int(self.pet.h))) if visible else cairo.Region()
+                surface.set_input_region(region)
             self.area.queue_draw()
             return True
 
@@ -1244,6 +1265,8 @@ def build_app(opts, tips):
             cr.set_operator(cairo.OPERATOR_SOURCE)
             cr.set_source_rgba(0, 0, 0, 0)
             cr.paint()
+            if not visible:
+                return
             cr.set_operator(cairo.OPERATOR_OVER)
             cr.set_antialias(cairo.ANTIALIAS_NONE)
 
@@ -1258,7 +1281,12 @@ def build_app(opts, tips):
 
 
 def run(opts, tips):
+    global visible
+    visible = not opts.start_hidden
     _load_gtk()
+    # Dispatched from the main loop, not from inside the signal handler, so
+    # the flip can never land in the middle of a frame.
+    GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1, toggle_visible)
     return build_app(opts, tips).run([])
 
 

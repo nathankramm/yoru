@@ -102,6 +102,7 @@ o.launch_on_start("python3 /home/nathan/.local/bin/yoru")
 | **Left click otherwise** | He says something |
 | **Middle click** | Snooze one hour. Again to wake him |
 | **Drag** | Move him. The spot is remembered across reboots |
+| **Super + Ctrl + Y** | Hide him entirely. Again to bring him back |
 
 From the terminal, no GUI involved:
 
@@ -125,6 +126,10 @@ yoru --forget-known       # un-retire everything
 | `--quiet` | | contextual tips only |
 | `--no-context` | | ignore the focused window |
 | `--no-theme` | | keep the built-in palette |
+| `--start-hidden` | | begin off screen |
+
+The keybind sends `SIGUSR1` and the process keeps running, so his position,
+snooze state and which tips he's seen all survive.
 
 ---
 

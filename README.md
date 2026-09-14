@@ -154,6 +154,7 @@ yoru --forget-known       # un-retire everything
 | `--no-own` | | don't turn your own `~/.config/hypr/bindings.lua` binds into tips |
 | `--no-basics` | | skip the sixteen first-hour tips he otherwise leads with |
 | `--start-hidden` | | begin off screen |
+| `--monitor` | focused | connector to live on, e.g. `DP-1` |
 | `--verify-report` | | list the tips this machine's bindings rule out, and exit |
 | `--debug` | | log every decision to stderr with a timestamp — attach it to a bug report |
 
@@ -174,6 +175,15 @@ something to say. Left alone he drops his head and grazes, and his ears and
 tail twitch the way a standing deer's do. Most of his walks are a trot; about
 one in five, he spooks himself and bounds instead, tail flagged. None of it
 does anything. It's just him.
+
+He lives on one monitor. A layer surface belongs to a single output, and the
+compositor puts him on whichever one has keyboard focus when he starts;
+`--monitor DP-1` picks one instead (an unknown name lists what's connected
+and exits). His saved spot is in that monitor's own pixels, so it doesn't
+carry between outputs of different sizes — a corner on a 1080p screen is
+mid-screen on a scaled laptop panel. If the monitor he's on is unplugged, the
+compositor moves him to another and he pulls himself back inside its edges,
+so he stays visible and draggable.
 
 ---
 
@@ -274,6 +284,14 @@ The next versions are about making him yours rather than generic.
   aliases in `~/.bashrc` and your scratchpad scripts are not.
 - **Frequency decay**, so he tapers as you learn instead of running at a fixed
   interval forever.
+- **A position that survives docking.** His saved spot is one monitor's
+  pixels, so unplugging or re-plugging a monitor still moves him: a corner on
+  a 1080p screen is mid-screen on a scaled laptop panel. He stays visible now
+  (he pulls himself inside the new edges), but not where you left him. Storing
+  the position as a corner plus an offset, or as fractions of the surface,
+  would fix it; which of those is right needs a few weeks of actually docking
+  before it's decided, and either changes what `state.json` means for
+  existing users.
 
 **A line this project won't cross.** Personalization here means reading files
 you wrote and noticing which window has focus. It will never mean watching

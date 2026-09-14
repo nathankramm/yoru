@@ -10,7 +10,8 @@ manager, browsers and updates — and he notices which of those you are in.
 Where he sits
     Bottom right by default, 24px off each edge. Drag him anywhere with the
     left mouse button and he stays there; the spot is saved to
-    ~/.config/yoru/state.json and survives a reboot.
+    ~/.config/yoru/state.json and survives a reboot. He lives on one
+    monitor: the focused one when he starts, or --monitor DP-1 to choose.
 
 What he does
     Ambient  — a tip every few minutes, never twice until he's run out.
@@ -938,6 +939,7 @@ class Pet:
         self.x = self.y = 0.0
         self.home_x = self.home_y = None
         self.placed = False
+        self.size = None            # surface size last seen by step()
 
         self.dir = -1
         self.speed = 0.0
@@ -993,11 +995,28 @@ class Pet:
         self.clamp_home(width, height)
         self.x, self.y = self.home_x, self.home_y
         self.dir = -1 if self.home_x > width / 2 else 1
+        self.size = (width, height)
         self.placed = True
 
     def clamp_home(self, width, height):
         self.home_x = max(4, min(self.home_x, width - self.w - 4))
         self.home_y = max(4, min(self.home_y, height - self.h - 4))
+
+    def refit(self, width, height):
+        """The surface changed size under him — a monitor was unplugged and
+        the compositor moved him to a smaller one, or a bigger one arrived.
+        A spot that was on-screen may not be now, and off-screen means
+        invisible *and* undraggable, since the input region follows him.
+        Pull home and his current position back inside the new bounds."""
+        was = (self.home_x, self.home_y, self.x, self.y)
+        self.clamp_home(width, height)
+        self.x = max(4, min(self.x, width - self.w - 4))
+        self.y = max(4, min(self.y, height - self.h - 4))
+        if self.mode in ("out", "back"):
+            self.target = max(4, min(self.target, width - self.w - 4))
+        debug("surface: %dx%d -> %dx%d; home (%d,%d) -> (%d,%d), at (%d,%d) -> (%d,%d)",
+              self.size[0], self.size[1], width, height, was[0], was[1],
+              self.home_x, self.home_y, was[2], was[3], self.x, self.y)
 
     # -- speech ------------------------------------------------------------
     def snoozing(self, now):
@@ -1111,6 +1130,9 @@ class Pet:
     def step(self, dt, now, width, height):
         if not self.placed:
             self.place(width, height)
+        elif (width, height) != self.size:
+            self.refit(width, height)
+            self.size = (width, height)
         if DEBUG:
             self._trace(now)
 
@@ -1185,6 +1207,9 @@ class Pet:
                 span = min(width * 0.45, 520)
                 self.target = max(4, min(
                     self.home_x + random.uniform(-span, span), width - self.w - 4))
+                # A walk only moves x. If y is off the surface he would walk
+                # past unseen, so bring it in before he sets off.
+                self.y = max(4, min(self.y, height - self.h - 4))
                 self.pose = "stand"          # head comes up before he moves
                 self.graze_for = 0.0
                 # One trip in five he spooks himself and bounds it, tail up.
@@ -1468,6 +1493,9 @@ def main(argv=None):
                    help="no ambient tips; only when asked or on context")
     p.add_argument("--start-hidden", action="store_true",
                    help="begin off screen; SIGUSR1 toggles him")
+    p.add_argument("--monitor", metavar="NAME",
+                   help="connector to live on, e.g. DP-1 (default: the focused "
+                        "one when he starts)")
     p.add_argument("--layer", default="overlay",
                    choices=["background", "bottom", "top", "overlay"])
     p.add_argument("--ask", metavar="QUERY", help="search his knowledge and exit")
@@ -1652,6 +1680,7 @@ def build_app(opts, tips):
             self.last_cursor = None
             self.ctx_full = (None, None)
             self._grab = (0.0, 0.0)
+            self.exit_code = 0
 
         # -- setup -------------------------------------------------------
         def do_activate(self):
@@ -1686,6 +1715,23 @@ def build_app(opts, tips):
                     LayerShell.set_anchor(win, edge, True)
                 LayerShell.set_exclusive_zone(win, 0)
                 LayerShell.set_keyboard_mode(win, LayerShell.KeyboardMode.NONE)
+                # A layer surface lives on one output, and without a choice
+                # the compositor uses the one with keyboard focus when he
+                # maps. --monitor pins it.
+                if opts.monitor:
+                    monitors = Gdk.Display.get_default().get_monitors()
+                    names = [monitors.get_item(i).get_connector()
+                             for i in range(monitors.get_n_items())]
+                    if opts.monitor not in names:
+                        print("yoru: no monitor called %r. Connected: %s"
+                              % (opts.monitor, ", ".join(names) or "none"),
+                              file=sys.stderr)
+                        self.exit_code = 1
+                        self.quit()
+                        return
+                    LayerShell.set_monitor(
+                        win, monitors.get_item(names.index(opts.monitor)))
+                    debug("monitor: pinned to %s", opts.monitor)
 
             area = Gtk.DrawingArea()
             area.set_draw_func(self.on_draw)
@@ -1910,7 +1956,9 @@ def run(opts, tips):
     # the flip can never land in the middle of a frame.
     add = GLibUnix.signal_add if GLibUnix else GLib.unix_signal_add
     add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1, toggle_visible)
-    return build_app(opts, tips).run([])
+    app = build_app(opts, tips)
+    rc = app.run([])
+    return app.exit_code or rc
 
 
 if __name__ == "__main__":

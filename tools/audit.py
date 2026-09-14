@@ -218,4 +218,31 @@ ck("30 fundamentals first, then everything", fund_ok and tier_first and opened
    % (nf, nf, "all fundamentals" if tier_first else first, len(later - m.FUNDAMENTAL),
       "wins" if context_ok else "LOST", "unchanged" if veteran_ok else veteran,
       "skips" if skip else "STILL GATED"))
+# A monitor is unplugged mid-run: the compositor moves the surface to a
+# smaller output and step() starts receiving the new size. He must end up
+# inside it — position, home and the input region alike — and a walk must
+# not carry him off the bottom.
+q = m.Pet(O, m.KNOWLEDGE); q.place(1920, 1054)
+q.home_x = q.home_y = None
+q.x, q.y = 1920 - q.w - 4, 1054 - q.h - 4          # dragged to the far corner
+q.home_x, q.home_y = q.x, q.y
+q.step(.033, 1.0, 1920, 1054)
+q.step(.033, 1.033, 1280, 774)                       # the surface shrank
+def inside(w, h): return (4 <= q.x <= w - q.w - 4 and 4 <= q.y <= h - q.h - 4
+                          and 4 <= q.home_x <= w - q.w - 4 and 4 <= q.home_y <= h - q.h - 4)
+migrated = inside(1280, 774)
+region = (int(q.x), int(q.y), int(q.w), int(q.h)); landed = (q.x, q.y, q.home_x, q.home_y)
+region_ok = region[0] >= 0 and region[1] >= 0 and region[0] + region[2] <= 1280 and region[1] + region[3] <= 774
+# The roam gap: a stranded y used to survive a walk. Force a walk at the new
+# size from an off-surface y and check he is on it while walking.
+q.y = q.home_y = 900; q.next_roam = 0; q.pause = 0; q.mode = "home"
+q.step(.033, 2.0, 1280, 774)
+walk_ok = q.mode == "out" and 4 <= q.y <= 774 - q.h - 4
+# And the reverse: a bigger surface changes nothing he can see.
+q2 = m.Pet(O, m.KNOWLEDGE); q2.place(1280, 774); q2.step(.033, 1.0, 1280, 774)
+was = (q2.x, q2.y); q2.step(.033, 1.033, 1920, 1054)
+grow_ok = (q2.x, q2.y) == was
+ck("31 migration to a smaller surface keeps him reachable", migrated and region_ok and walk_ok and grow_ok,
+   "after 1920x1054 -> 1280x774: at (%d,%d), home (%d,%d), region %s; walk from y=900 -> y=%d; grow %s"
+   % (landed + (region, q.y, "unchanged" if grow_ok else "MOVED")))
 print("\n%d/%d  FAILURES: %s" % (N - len(F), N, F or "none"))

@@ -7,7 +7,7 @@ Omarchy. He knows 189 things about it, notices which app you're in,
 follows your theme, and — unlike his spiritual ancestor — shuts up when you
 tell him to.
 
-![Yoru](yoru.png)
+https://github.com/nathankramm/yoru/raw/main/docs/yoru-motion.mp4
 
 ---
 
@@ -76,25 +76,43 @@ Foot. See [Roadmap](#roadmap).
 ## Install
 
 ```bash
-sudo pacman -S --needed python-gobject gtk4 gtk4-layer-shell python-cairo
-
 git clone https://github.com/nathankramm/yoru.git
-install -Dm755 yoru/yoru.py ~/.local/bin/yoru
+cd yoru
+./install.sh
 ```
 
-Try it before committing to it:
+No sudo. It checks the four dependencies and prints the `pacman` line if any
+are missing, puts `yoru.py` at `~/.local/bin/yoru`, and adds one
+`o.launch_on_start` line to `~/.config/hypr/autostart.lua` (backing it up
+first, and only if no yoru line is there already — running it twice is safe).
+Autostart takes effect at your next login; until then, `yoru &`.
+
+Try the knobs before committing to them:
 
 ```bash
 yoru --interval 20 --roam 20 --idle 0
 ```
 
-Then add him to your session in `~/.config/hypr/autostart.lua`:
+`./uninstall.sh` reverses it — stops him, removes the binary and the
+autostart line — and asks before touching `~/.config/yoru`, which is yours:
+his position, what he has said, what you retired.
 
-```lua
-o.launch_on_start("python3 /home/nathan/.local/bin/yoru")
+<details>
+<summary>By hand, if you'd rather see each step</summary>
+
+```bash
+sudo pacman -S --needed python-gobject gtk4 gtk4-layer-shell python-cairo
+install -Dm755 yoru.py ~/.local/bin/yoru
 ```
 
-> Hyprland's PATH doesn't include `~/.local/bin`, so use the absolute path.
+Then one line in `~/.config/hypr/autostart.lua`, with your own home directory
+spelled out (the launcher runs before your shell has expanded anything):
+
+```lua
+o.launch_on_start("/home/you/.local/bin/yoru")
+```
+
+</details>
 
 ---
 
@@ -213,6 +231,8 @@ use — and repaints within four seconds of a theme switch.
 Because the coat is mapped to the theme's **foreground** and the halo to its
 **background**, light themes work with no special handling: the deer simply
 goes dark.
+
+![Yoru](yoru.png)
 
 ![Themes](yoru-themes.png)
 

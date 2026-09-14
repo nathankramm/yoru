@@ -145,6 +145,15 @@ for line in m.CHATTER + m.LATE + m.POKES:
     l.set_text(line)
     if l.get_line_count() > 3: over.append((l.get_line_count(), line[:40]))
 ck("25 everything fits the bubble", not over, over)
+# Check 25 owns rendering: it measures Pango lines, so a 98-character tip that
+# wraps to three lines still passes it. This one counts characters. 93 is not
+# a rendering limit; it is the observed corpus maximum (Super + K has been 93
+# since the first commit), and a line past it is a line nobody has read yet.
+longest = max((len(x), x) for x in [t[3] for t in m.KNOWLEDGE] + m.CHATTER + m.LATE + m.POKES)
+long_lines = [(len(x), x[:50]) for x in [t[3] for t in m.KNOWLEDGE] + m.CHATTER + m.LATE + m.POKES
+              if len(x) > 93]
+ck("28 nothing over 93 characters", not long_lines,
+   "longest %d" % longest[0] if not long_lines else long_lines)
 oob = [(pose, b, f) for pose in ("stand", "graze") for b in (False, True)
        for f in range(4) for e in (0, 1) for tl in (0, 1)
        if (lambda q: min(z[0] for z in q) < -3 or max(z[0] for z in q) > 27

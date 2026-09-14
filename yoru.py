@@ -344,7 +344,7 @@ KNOWLEDGE = [
     ("windows", None, "Super + Escape", "Lock, suspend, hibernate, log out, reboot, shut down. Screensaver, if you want a show."),
     ("windows", None, "Super + Ctrl + L", "Lock the screen. The idle timer that does it for you is in shell.json."),
     ("windows", None, "Super + W", "Close the window. No confirmation dialog. There was never going to be one."),
-    ("windows", None, "Ctrl + Alt + Del", "Closes every window. The nuclear option, kept where you can reach it."),
+    ("windows", None, "Ctrl + Alt + Delete", "Closes every window. The nuclear option, kept where you can reach it."),
     ("windows", None, "Super + T", "Toggle a window between tiling and floating. Floating is a temporary condition."),
     ("windows", None, "Super + J", "Toggle the split between horizontal and vertical."),
     ("windows", None, "Super + F", "Full screen. Super + Alt + F goes full width, which is the one you actually want."),
@@ -376,14 +376,14 @@ KNOWLEDGE = [
     ("workspaces", None, "Super + Shift + Alt + Arrows", "Move workspaces to the monitor in that direction."),
 
     # ----------------------------------------------------------- panels ----
-    ("panels", None, "Super + Ctrl + W", "Wifi panel. A audio, B bluetooth, D display, P power."),
+    ("panels", None, "Super + Ctrl + W", "Wi-Fi panel. A audio, B bluetooth, D display, P power."),
     ("panels", None, "Super + Ctrl + Alt + D", "The calendar panel. Clicking the clock opens it too."),
     ("panels", None, "Super + Ctrl + 1-9", "Toggle a bar panel by position, counting from the right section."),
     ("panels", None, "Super + Ctrl + T", "Activity — btop. It floats. Super + T tiles it, because everything should tile."),
-    ("panels", None, "Super + Ctrl + Q", "Calculator. Super + Ctrl + E is emoji. Both faster than opening a browser tab."),
+    ("panels", None, "Super + Ctrl + Q", "Calculator. Super + Ctrl + E is emoji. Both faster than reaching for a phone."),
     ("panels", None, "Super + Ctrl + H", "Hardware menu. Super + Ctrl + O is the toggle menu."),
     ("panels", None, "Super + Ctrl + S", "Share a file to anything else on your network. No account, no upload, no cloud."),
-    ("panels", None, "Super + Ctrl + .", "Transcode media without learning a single ffmpeg flag. Nobody has learned them."),
+    ("panels", None, "Super + Ctrl + .", "Transcode media without learning a single ffmpeg flag."),
 
     # ---------------------------------------------------------- capture ----
     ("capture", None, "Print Screen", "Screenshot. Alt + Print Screen records; press it again to stop. That's the whole thing."),
@@ -409,7 +409,7 @@ KNOWLEDGE = [
     ("style", None, "Super + Ctrl + Shift + Space", "Pick a theme. Super + Ctrl + Space picks the background. Beauty motivates, not decorates."),
     ("style", None, "Super + Shift + Space", "Toggle the top bar. Nothing up there was ever that urgent."),
     ("style", None, "~/.config/omarchy/backgrounds", "Extras go in the subfolder named for the theme, like /nord."),
-    ("style", None, "A theme", "Restyles the desktop, terminal, neovim, btop, Chromium and the shell. All of it, at once."),
+    ("style", None, "A theme", "Restyles the desktop, terminal, Neovim, btop, Chromium and the shell. All of it, at once."),
     ("style", None, "Obsidian", "Follows the theme too — pick Omarchy once in Appearance > Themes and it stays current."),
 
     # ---------------------------------------------------------- toggles ----
@@ -436,7 +436,7 @@ KNOWLEDGE = [
     ("apps", None, "Super + Shift + W", "Omawrite. A blank page and nothing else. No ribbon, no assistant, no upsell."),
     ("apps", None, "Super + Shift + A", "ChatGPT. Super + Shift + Alt + A is Grok."),
     ("apps", None, "Disk Usage", "Walks the filesystem biggest first and deletes in place. Always node_modules."),
-    ("apps", None, "About", "Fastfetch in a frame. Kernel, uptime, theme, and the pleasure of being asked."),
+    ("apps", None, "About", "Fastfetch in a frame. Kernel, uptime, theme and the pleasure of being asked."),
     ("apps", None, "Omacut", "Trims a video's length. Built on ffmpeg, minus the ffmpeg."),
 
     # ------------------------------------------------------------ setup ----
@@ -470,7 +470,7 @@ KNOWLEDGE = [
     # ------------------------------------------------------------ fixes ----
     ("fixes", None, "Update > Hardware", "Reload Wi-Fi, Bluetooth, Audio or Trackpad before you reboot."),
     ("fixes", None, "GDK_SCALE", "Apps too big? Omarchy assumes a 2x display. It's a line in monitors.lua, not a crisis."),
-    ("fixes", None, "Caps Lock", "It isn't broken. It's the compose key now. Arguably its first useful job."),
+    ("fixes", None, "CapsLock", "It isn't broken. It's the compose key now. Arguably its first useful job."),
     ("fixes", None, "Ctrl + Minus", "Shrinks Spotify's oversized UI. Ctrl + Plus goes the other way."),
     ("fixes", TERM, "omarchy audio tuning status", "Tells you if a laptop speaker correction is on. Add off to stop it."),
     ("fixes", None, "Ctrl + Alt + F2", "Locked out by a bad password? A TTY, then faillock --reset --user."),
@@ -481,7 +481,7 @@ KNOWLEDGE = [
     ("config", None, "~/.config/hypr/bindings.lua", "Your keybindings. o.bind adds one; hl.unbind a default first if you're replacing it."),
     ("config", None, "~/.config/hypr/monitors.lua", "Monitors, resolution and position. looknfeel.lua does gaps and borders."),
     ("config", None, "~/.config/hypr/autostart.lua", "o.launch_on_start(\"thing\") starts it with your session."),
-    ("config", None, "~/.config/omarchy/shell.json", "Bar position, widgets, and the screensaver and idle timings."),
+    ("config", None, "~/.config/omarchy/shell.json", "Bar position, widgets, screensaver and idle timings."),
     ("config", None, "~/.config/foot/foot.ini", "Your terminal's config, foot being the default."),
     ("config", None, "~/.bashrc", "Your aliases, functions and exports. Never overwritten by an update. Ever."),
     ("config", None, "~/.config/omarchy/hooks", "Scripts in <event>.d/ run on post-boot, post-update, theme-set."),
@@ -504,7 +504,7 @@ KNOWLEDGE = [
     ("shell", TERM, "ga [branch]", "A worktree and branch beside the repo, and jumps you in. gd removes it."),
     ("shell", TERM, "rsw [source] [destination]", "Rsyncs on every change, remote host and all. lsw lists, dsw stops."),
     ("shell", TERM, "fip nyc-dev 3000", "Forwards a remote port to localhost over SSH. dip drops it, lip lists."),
-    ("shell", TERM, "ssh", "Wrapped — it cleans up and reconnects when the link drops. Ctrl-C still means stop."),
+    ("shell", TERM, "ssh", "Wrapped — it cleans up and reconnects when the link drops. Ctrl + C still means stop."),
 
     # ------------------------------------------------------------- tmux ----
     ("tmux", TERM, "Ctrl + Space", "The prefix. Prefix + v splits beside, prefix + h below."),
@@ -537,7 +537,7 @@ KNOWLEDGE = [
     ("agents", None, "A crash notification", "Click it and your agent is handed the core dump to explain."),
     ("agents", AGENT, "Agent skills", "Omarchy ships two — omarchy and diagnose-crash — symlinked into each harness."),
     ("agents", AGENT, "Agent theming", "Claude Code, Pi, OpenCode and Hermes follow your Omarchy theme."),
-    ("agents", AGENT, "LM Studio", "That or Ollama, for running open-weight models on this machine. No key, no meter."),
+    ("agents", AGENT, "LM Studio", "That or Ollama, for running open-weight models on this machine. The model lives on your disk."),
 
     # ---------------------------------------------------------- ghostty ----
     ("ghostty", ("ghostty",), "Ctrl + Shift + E", "New split below. Ctrl + Shift + O splits beside."),
@@ -549,11 +549,11 @@ KNOWLEDGE = [
     ("neovim", NVIM, "Space", "The leader. Press it and wait — every option explains itself. Start here when lost."),
     ("neovim", NVIM, "Space Space", "Fuzzy find a file. Space S G greps their contents with a preview."),
     ("neovim", NVIM, "Space E", "Toggle the file tree. Ctrl + W W hops between it and the editor."),
-    ("neovim", NVIM, "Space G G", "LazyGit, floating, from the current directory."),
+    ("neovim", NVIM, "Space G G", "lazygit, floating, from the current directory."),
     ("neovim", NVIM, "Shift + H", "Left through the open tabs. Shift + L right, Space B D closes."),
     ("neovim", NVIM, "Space B O", "Close every tab but this one. Space U W toggles soft wrap."),
     ("neovim", NVIM, "?", "In the file tree, lists every command it has."),
-    ("neovim", NVIM, "Ctrl + Left/Right arrow", "Narrows or widens the focused window, two columns a press. The sidebar, or any split."),
+    ("neovim", NVIM, "Ctrl + Left/Right Arrow", "Narrows or widens the focused window, two columns a press. The sidebar, or any split."),
     ("neovim", TERM, "n", "The alias for nvim. n myfile.txt opens just that one."),
     ("neovim", TERM, "sudoedit", "Edit root-owned files with all your plugins still loaded."),
     ("neovim", NVIM, "lazyvim.org/keymaps", "Everything LazyVim binds, on one page. Bookmark it, you'll be back."),
@@ -587,12 +587,12 @@ CHATTER = [
     # distinction is the whole reason Clippy was resented and this isn't:
     # it was status-lowering toward the user. Punch at bloat instead.
     "Every program has a tiny essence that justifies it. The rest is someone's résumé.",
-    "Your entire desktop is config files and good taste. That's the trick. That's the whole trick.",
+    "Your entire desktop is config files and good taste. That is the whole trick.",
     "Somewhere a team of forty is shipping a settings panel. You have a text file.",
     "Zero bloat here. Nothing ships that nobody uses. A bolder promise than it sounds.",
     "Somewhere a man is paying monthly to edit text. You are not that man.",
     "Nothing here phones home. I checked. I'm the only one watching, and I'm facing the wall.",
-    "The cloud is someone else's computer, and they have started charging you rent.",
+    "The cloud is someone else's computer.",
     "This desktop boots before most web apps finish showing you their loading spinner.",
     "The whole shell fits in less memory than one browser tab. Sit with that.",
     "Better a kick-ass half than a half-assed whole. Ship the half. Ship it tonight.",
@@ -607,7 +607,7 @@ CHATTER = [
     "Yes, you edit config files by hand here. That's not a bug report. That's the point.",
     "Omakase: the chef chooses. You may disagree, but not before you've tried it.",
     "Every keybinding you learn is one you keep. Not true of most things you learn.",
-    "An hour of reading the manual saves a week of wondering. Nobody does it anyway.",
+    "An hour of reading the manual saves a week of wondering.",
     "An agent can type it. Taste is still yours. Nobody has automated taste.",
     "My ancestor asked if you were writing a letter. I will never ask you anything.",
     "The paperclip was hated for interrupting, not for being a paperclip. I took notes.",
@@ -615,7 +615,7 @@ CHATTER = [
     "Two hundred-odd bindings on this machine. You use eleven. Everyone uses eleven.",
     "That window has been floating for an hour. I'm not going to say anything.",
     "I reread the manual. Still no chapter on deer.",
-    "It's dark, everything tiles, and nothing is asking me to rate my experience.",
+    "It's dark, everything tiles and nothing is asking me to rate my experience.",
     "Grazing.",
 ]
 

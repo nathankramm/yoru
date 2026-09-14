@@ -152,6 +152,7 @@ yoru --forget-known       # un-retire everything
 | `--no-context` | | ignore the focused window |
 | `--no-theme` | | keep the built-in palette |
 | `--no-own` | | don't turn your own `~/.config/hypr/bindings.lua` binds into tips |
+| `--no-basics` | | skip the sixteen first-hour tips he otherwise leads with |
 | `--start-hidden` | | begin off screen |
 | `--verify-report` | | list the tips this machine's bindings rule out, and exit |
 | `--debug` | | log every decision to stderr with a timestamp — attach it to a bug report |

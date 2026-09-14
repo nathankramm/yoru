@@ -187,4 +187,35 @@ ck("29 own-bind tips replace, never duplicate", not twice and len(ids) == len(se
    and all(r in {m.tip_id(t) for t in m.KNOWLEDGE} for r in replaced),
    "%d own, %d curated replaced (%s); keys covered twice %s; empty file -> %d" % (
        len(own), len(replaced), ", ".join(sorted(replaced)) or "none", twice, len(empty)))
+# The fundamentals tier. Fresh state: the first picks are all fundamentals,
+# then the pool opens. Context ignores the tier. A user who has seen most of
+# the corpus gets exactly the old draw. --no-basics gets it from the start.
+def fresh_pet(**kw):
+    q = m.Pet(types.SimpleNamespace(**dict(vars(O), **kw)), m.KNOWLEDGE)
+    q.seen = set(); q.known = set(); q.shown = 0
+    return q
+ids_all = {m.tip_id(t) for t in m.KNOWLEDGE}
+fund_ok = m.FUNDAMENTAL <= ids_all
+q = fresh_pet(); nf = len(m.FUNDAMENTAL)
+first = [m.tip_id(q.pick()) for _ in range(nf)]
+tier_first = set(first) == set(m.FUNDAMENTAL)             # each exactly once
+later = {m.tip_id(q.pick()) for _ in range(60)}
+opened = bool(later - m.FUNDAMENTAL)                        # pool opened up
+q = fresh_pet(); q.known = {sorted(m.FUNDAMENTAL)[0]}       # retiring one doesn't hold it open
+retired_ok = len({m.tip_id(q.pick()) for _ in range(nf - 1)}) == nf - 1 and \
+             m.tip_id(q.pick()) not in m.FUNDAMENTAL
+q = fresh_pet()
+ctx = q.pick(cls="foot", context="foot nvim a.rb")            # context wins over the tier
+context_ok = ctx is not None and ctx[0] == "neovim"
+q = fresh_pet(); q.shown = 150
+q.seen = ids_all - {"agents:omarchy-mise-install", "tmux:tsl [count] [command]"}
+veteran = {m.tip_id(q.pick()) for _ in range(2)}
+veteran_ok = veteran == {"agents:omarchy-mise-install", "tmux:tsl [count] [command]"}
+skip = any(m.tip_id(fresh_pet(no_basics=True).pick()) not in m.FUNDAMENTAL for _ in range(40))
+ck("30 fundamentals first, then everything", fund_ok and tier_first and opened
+   and retired_ok and context_ok and veteran_ok and skip,
+   "%d fundamentals; first %d picks: %s; then %d others seen; context %s; veteran %s; --no-basics %s"
+   % (nf, nf, "all fundamentals" if tier_first else first, len(later - m.FUNDAMENTAL),
+      "wins" if context_ok else "LOST", "unchanged" if veteran_ok else veteran,
+      "skips" if skip else "STILL GATED"))
 print("\n%d/%d  FAILURES: %s" % (N - len(F), N, F or "none"))

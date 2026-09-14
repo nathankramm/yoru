@@ -588,6 +588,31 @@ KNOWLEDGE = [
     ("emoji", None, "CapsLock Space Space", "An em dash. Space N your name, Space E your email. Small mercies, daily."),
 ]
 
+# The first hour. While any of these is unseen, ambient tips come from here
+# and nowhere else: a new user needs the menu and the keybinding list before
+# they need omarchy-mise-install, and the flat draw made those equally likely.
+# Context still wins — focus Neovim and you get the Neovim tip — because a
+# tip about the window in front of you beats a syllabus. Ids, not tuples, so
+# a tip can be edited without touching this.
+FUNDAMENTAL = frozenset([
+    "windows:Super + K",                    # every keybinding; makes the rest discoverable
+    "windows:Super + Space",                # the Omarchy menu
+    "windows:Super + Alt + Space",          # the apps menu
+    "apps:Super + Return",                  # terminal
+    "apps:Super + Shift + Return",          # browser
+    "windows:Super + W",                    # close the window
+    "workspaces:Super + 1/2/3/4",           # workspaces, Shift to bring the window
+    "windows:Super + Arrow",                # focus, Shift to swap
+    "windows:Super + T",                    # tiling vs floating
+    "windows:Super + F",                    # full screen, full width
+    "windows:Super + Escape",               # lock, suspend, shut down: how to leave
+    "panels:Super + Ctrl + W",              # Wi-Fi, and the other panels
+    "capture:Print Screen",                 # screenshot, recording
+    "clipboard:Super + C",                  # copy and paste, in the terminal too
+    "style:Super + Ctrl + Shift + Space",   # the theme picker: the payoff
+    "cli:omarchy update",                   # the right way to update
+])
+
 CHATTER = [
     # Opinions about software, never about the person reading them. That
     # distinction is the whole reason Clippy was resented and this isn't:
@@ -901,6 +926,7 @@ class Pet:
         self.tips = tips
         self.seen = load_seen()
         self.known = load_known()
+        self.basics = not getattr(opts, "no_basics", False)
         self.current = None
         # How much of the manual he has already handed over, counted across
         # every session. Drives the chatter ratio below.
@@ -1021,11 +1047,20 @@ class Pet:
         if not pool:
             debug("tip (%s): every candidate is suppressed", why)
             return None
+        # The general pool is the fundamentals until they are used up. A
+        # retired one counts as used: "I know this" must not hold the tier
+        # open. Once none is left, this is exactly the draw it always was.
+        basics = [] if context is not None or not self.basics else [
+            t for t in pool if tip_id(t) in FUNDAMENTAL
+            and tip_id(t) not in self.seen and tip_id(t) not in self.known]
+        if basics:
+            pool = basics
         pool = [t for t in pool if tip_id(t) not in self.known] or pool
         fresh = [t for t in pool if tip_id(t) not in self.seen]
         tip = random.choice(fresh or pool)
-        debug("tip (%s): %s — %d unseen of %d candidates%s", why, tip_id(tip),
-              len(fresh), len(pool), (" for %r" % cls) if context is not None else "")
+        debug("tip (%s): %s — %d unseen of %d candidates%s%s", why, tip_id(tip),
+              len(fresh), len(pool), (" for %r" % cls) if context is not None else "",
+              (" [fundamental, %d left]" % (len(basics) - 1)) if basics else "")
         self.mark_seen(tip)
         self.current = tip
         return tip
@@ -1427,6 +1462,8 @@ def main(argv=None):
                    help="ignore the focused window entirely")
     p.add_argument("--no-own", action="store_true",
                    help="don't make tips from your own ~/.config/hypr/bindings.lua")
+    p.add_argument("--no-basics", action="store_true",
+                   help="skip the first-hour tips; you already know Omarchy")
     p.add_argument("--quiet", action="store_true",
                    help="no ambient tips; only when asked or on context")
     p.add_argument("--start-hidden", action="store_true",

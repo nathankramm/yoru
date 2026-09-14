@@ -11,7 +11,8 @@ Where he sits
     Bottom right by default, 24px off each edge. Drag him anywhere with the
     left mouse button and he stays there; the spot is saved to
     ~/.config/yoru/state.json and survives a reboot. He lives on one
-    monitor: the focused one when he starts, or --monitor DP-1 to choose.
+    monitor: the focused one when he starts, or --monitor DP-1 to choose
+    (falls back to the focused one if that output isn't connected).
 
 What he does
     Ambient  — a tip every few minutes, never twice until he's run out.
@@ -1666,6 +1667,18 @@ def _load_gtk():
                      GLibUnix=GLibUnix)
 
 
+def resolve_monitor(name, monitors):
+    """The monitor object whose connector is `name`, or None with a warning
+    naming what is connected. None means "let the compositor choose", which
+    is exactly what no --monitor does; nothing here may exit."""
+    for connector, monitor in monitors:
+        if connector == name:
+            return monitor
+    print("yoru: no monitor called %r; using the focused one. Connected: %s"
+          % (name, ", ".join(c for c, _ in monitors) or "none"), file=sys.stderr)
+    return None
+
+
 def draw_sprite(cr, pet, oy):
     px, flip = pet.px, pet.dir < 0
     pts = pixels(pet.frame(), pet.blink > 0, pet.pose,
@@ -1747,10 +1760,15 @@ def build_app(opts, tips):
             self.last_cursor = None
             self.ctx_full = (None, None)
             self._grab = (0.0, 0.0)
-            self.exit_code = 0
 
         # -- setup -------------------------------------------------------
         def do_activate(self):
+            # A second `yoru` while one runs is forwarded here by GTK's
+            # single-instance machinery. Without this it opened a second
+            # window in the running process: two deer, one Pet.
+            if getattr(self, "win", None) is not None:
+                debug("activate: already running, ignoring a second launch")
+                return
             win = Gtk.ApplicationWindow(application=self)
             win.set_decorated(False)
             win.add_css_class("yoru")
@@ -1784,21 +1802,17 @@ def build_app(opts, tips):
                 LayerShell.set_keyboard_mode(win, LayerShell.KeyboardMode.NONE)
                 # A layer surface lives on one output, and without a choice
                 # the compositor uses the one with keyboard focus when he
-                # maps. --monitor pins it.
+                # maps. --monitor pins it — when that output is here. It
+                # must never stop him starting: the flag lives in
+                # autostart.lua, and a laptop boots undocked.
                 if opts.monitor:
                     monitors = Gdk.Display.get_default().get_monitors()
-                    names = [monitors.get_item(i).get_connector()
-                             for i in range(monitors.get_n_items())]
-                    if opts.monitor not in names:
-                        print("yoru: no monitor called %r. Connected: %s"
-                              % (opts.monitor, ", ".join(names) or "none"),
-                              file=sys.stderr)
-                        self.exit_code = 1
-                        self.quit()
-                        return
-                    LayerShell.set_monitor(
-                        win, monitors.get_item(names.index(opts.monitor)))
-                    debug("monitor: pinned to %s", opts.monitor)
+                    chosen = resolve_monitor(opts.monitor, [
+                        (monitors.get_item(i).get_connector(), monitors.get_item(i))
+                        for i in range(monitors.get_n_items())])
+                    if chosen is not None:
+                        LayerShell.set_monitor(win, chosen)
+                        debug("monitor: pinned to %s", opts.monitor)
 
             area = Gtk.DrawingArea()
             area.set_draw_func(self.on_draw)
@@ -2023,9 +2037,7 @@ def run(opts, tips):
     # the flip can never land in the middle of a frame.
     add = GLibUnix.signal_add if GLibUnix else GLib.unix_signal_add
     add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1, toggle_visible)
-    app = build_app(opts, tips)
-    rc = app.run([])
-    return app.exit_code or rc
+    return build_app(opts, tips).run([])
 
 
 if __name__ == "__main__":

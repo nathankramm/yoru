@@ -265,4 +265,20 @@ ck("32 missing software withholds only its own tips", map_ok and fake_ok and ope
    "%d tips over %d packages; fake set -> %d withheld as expected; pacman unavailable -> 0; live query: %s"
    % (len(mapped), len(m.NEEDS), len(gone),
       "%d packages" % len(live) if live else "unavailable (fails open)"))
+# --monitor lives in autostart.lua, and a laptop boots undocked: an unknown
+# connector must warn, name what is connected, and fall through to the
+# compositor's choice — never exit. Pure resolver, so no display needed.
+import io, contextlib
+fake = [("eDP-1", "obj-edp"), ("DP-8", "obj-dp8")]
+err = io.StringIO()
+with contextlib.redirect_stderr(err):
+    hit = m.resolve_monitor("DP-8", fake)
+    miss = m.resolve_monitor("DP-99", fake)
+    none = m.resolve_monitor("DP-99", [])
+warned = err.getvalue()
+resolver_src = src.split("def resolve_monitor")[1].split("def draw_sprite")[0]
+ck("33 unknown --monitor never stops him", hit == "obj-dp8" and miss is None and none is None
+   and "DP-99" in warned and "eDP-1" in warned and "DP-8" in warned and "none" in warned
+   and "sys.exit" not in resolver_src and ".quit(" not in resolver_src,
+   "known -> pinned; unknown -> None with warning naming %s" % ", ".join(c for c, _ in fake))
 print("\n%d/%d  FAILURES: %s" % (N - len(F), N, F or "none"))

@@ -155,7 +155,7 @@ yoru --forget-known       # un-retire everything
 | `--no-basics` | | skip the sixteen first-hour tips he otherwise leads with |
 | `--no-packages` | | teach software whether or not `pacman` says it's installed |
 | `--start-hidden` | | begin off screen |
-| `--monitor` | focused | connector to live on, e.g. `DP-1` |
+| `--monitor` | focused | connector to live on, e.g. `DP-1`; if it isn't connected he warns and uses the focused output, so it's safe in `autostart.lua` |
 | `--verify-report` | | list the tips this machine's bindings rule out, and exit |
 | `--debug` | | log every decision to stderr with a timestamp — attach it to a bug report |
 
@@ -179,8 +179,9 @@ does anything. It's just him.
 
 He lives on one monitor. A layer surface belongs to a single output, and the
 compositor puts him on whichever one has keyboard focus when he starts;
-`--monitor DP-1` picks one instead (an unknown name lists what's connected
-and exits). His saved spot is in that monitor's own pixels, so it doesn't
+`--monitor DP-1` picks one instead; if that output isn't connected he says so
+on stderr, names what is, and takes the focused one — so the flag is safe in
+`autostart.lua` on a laptop that boots undocked. His saved spot is in that monitor's own pixels, so it doesn't
 carry between outputs of different sizes — a corner on a 1080p screen is
 mid-screen on a scaled laptop panel. If the monitor he's on is unplugged, the
 compositor moves him to another and he pulls himself back inside its edges,

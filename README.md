@@ -62,8 +62,9 @@ Neovim/LazyVim, lazygit, lazydocker, btop, Nautilus, browsers, updates and
 snapshots. Everything he says was checked against the manual in the
 [`quattro` branch of the Omarchy repo][omarchy], not against a search engine.
 
-He does **not** yet know *your* Omarchy. He'll happily teach you a default
-keybinding you've already overridden in `bindings.lua`, or mention Ghostty when
+He does **not** yet know *your* Omarchy. He checks that a binding still exists
+before teaching it (see [Your bindings](#your-bindings)), but he'll still teach
+you a default you've rebound to mean something else, or mention Ghostty when
 you're on Foot. See [Roadmap](#roadmap).
 
 ---

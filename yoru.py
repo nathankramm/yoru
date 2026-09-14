@@ -51,6 +51,8 @@ import sys
 import tempfile
 import time
 
+VERSION = "1.0.0"
+
 CONFIG = os.path.expanduser("~/.config/yoru")
 STATE = os.path.join(CONFIG, "state.json")
 SEEN = os.path.join(CONFIG, "seen.json")
@@ -78,12 +80,15 @@ def debug(msg, *args):
 # "get out of the way for a minute". Compare pkill, which would reset all
 # of it and replay the intro.
 visible = True
+_on_visibility = []             # the running app's reaction, if any
 
 
 def toggle_visible(*_):
     global visible
     visible = not visible
     debug("visible: %s (SIGUSR1)", "shown" if visible else "hidden")
+    for fn in _on_visibility:
+        fn(visible)
     return True                 # keep the signal watch installed
 
 # ---------------------------------------------------------------- sprite ----
@@ -1024,6 +1029,9 @@ class Pet:
         # anything else and they'd be burned talking to an empty chair.
         self.idle_after = getattr(opts, "idle", 300)
         self.present_until = 1e9 if not self.idle_after else 0.0
+        # --still: parked for good. No walks, no bounds, no grazing; he
+        # still blinks and still talks.
+        self.still = getattr(opts, "still", False)
 
         self.head = self.text = None
         self.text_until = 0.0
@@ -1219,7 +1227,8 @@ class Pet:
             if self.graze_for <= 0 or self.text or self.mode != "home":
                 self.graze_for = 0.0
                 self.pose = "stand"
-        elif (self.mode == "home" and not self.text and self.pause <= 0):
+        elif (self.mode == "home" and not self.text and self.pause <= 0
+              and not self.still):
             self.next_graze -= dt
             if self.next_graze <= 0:
                 self.pose = "graze"
@@ -1260,6 +1269,8 @@ class Pet:
             return
 
         if self.mode == "home":
+            if self.still:
+                return
             self.next_roam -= dt
             if self.next_roam <= 0:
                 span = min(width * 0.45, 520)
@@ -1321,6 +1332,14 @@ class Pet:
 
     def bounding(self):
         return self.mode in ("out", "back") and self.pause <= 0 and self.speed > 120
+
+    def render_key(self):
+        """Everything a frame depends on. Two equal keys draw the same
+        pixels, so a frame whose key hasn't moved needn't be drawn at all —
+        and between a blink, an ear and a tail, most frames haven't."""
+        return (int(self.x), int(self.y), self.dir, self.frame(), self.pose,
+                self.blink > 0, self.ear > 0, self.tail > 0, self.bounding(),
+                self.head, self.text)
 
     def frame(self):
         if self.mode not in ("out", "back") or self.pause > 0:
@@ -1557,6 +1576,9 @@ def main(argv=None):
                    help="skip the first-hour tips; you already know Omarchy")
     p.add_argument("--quiet", action="store_true",
                    help="no ambient tips; only when asked or on context")
+    p.add_argument("--still", action="store_true",
+                   help="never walk, bound or graze; he only blinks and talks")
+    p.add_argument("--version", action="version", version="yoru " + VERSION)
     p.add_argument("--start-hidden", action="store_true",
                    help="begin off screen; SIGUSR1 toggles him")
     p.add_argument("--monitor", metavar="NAME",
@@ -1760,6 +1782,9 @@ def build_app(opts, tips):
             self.last_cursor = None
             self.ctx_full = (None, None)
             self._grab = (0.0, 0.0)
+            self._sources = {}          # name -> GLib source id, while running
+            self._key = None            # last frame drawn
+            self._palette = 0           # bumps on every theme repaint
 
         # -- setup -------------------------------------------------------
         def do_activate(self):
@@ -1836,13 +1861,62 @@ def build_app(opts, tips):
                       "applied" if themed else "unreadable, built-in palette")
             self._theme_stamp = theme_stamp()
             win.present()
-            GLib.timeout_add(33, self.tick)
             if not read_state().get("introduced"):
                 GLib.timeout_add_seconds(4, self.intro)
+            _on_visibility.append(self.set_visible)
+            if visible:
+                self.start()
+
+        # -- scheduling --------------------------------------------------
+        # Every recurring job is a source in self._sources, so hiding him
+        # can stop all of it and showing him can start it again. The two
+        # polls reschedule themselves each time with an interval chosen
+        # from what the machine is doing: 2s and 4s with someone there,
+        # 30s when presence says they're away or he's snoozed. The first
+        # poll that sees activity handles it in the same call, so the
+        # window that woke you up still gets its tip.
+        def start(self):
+            self._running = True
+            self.last = GLib.get_monotonic_time() / 1e6
+            self._key = None
+            self._sources["tick"] = GLib.timeout_add(33, self.tick)
             if not opts.no_theme:
-                GLib.timeout_add_seconds(4, self.poll_theme)
+                self._schedule("theme", self.poll_theme, 4)
             if not opts.no_context:
-                GLib.timeout_add_seconds(2, self.poll_context)
+                self.poll_context()     # now, so a window you're in gets its
+                                        # tip; it schedules the next itself
+
+        def stop(self):
+            self._running = False
+            for src in self._sources.values():
+                GLib.source_remove(src)
+            self._sources.clear()
+
+        def _schedule(self, name, fn, seconds):
+            self._sources[name] = GLib.timeout_add_seconds(seconds, fn)
+
+        def _reschedule(self, name, fn, busy_seconds, now):
+            """Return False from the caller after this: the old source is
+            done, a new one is queued at the interval that fits."""
+            self._sources.pop(name, None)
+            if not getattr(self, "_running", False):
+                return False            # stopped while we ran
+            quiet = not self.pet.present(now) or self.pet.snoozing(now)
+            self._schedule(name, fn, 30 if quiet else busy_seconds)
+            return False
+
+        def set_visible(self, shown):
+            """SIGUSR1. Hidden means no stepping and no polling at all — he
+            is invisible and untouchable, so nothing he'd do could show.
+            The Pet keeps its state untouched; showing him resumes it."""
+            if shown:
+                self.start()
+            else:
+                self.stop()
+            surface = self.win.get_surface()
+            if surface is not None and not shown:
+                surface.set_input_region(cairo.Region())
+            self.area.queue_draw()
 
         # -- input -------------------------------------------------------
         def on_click(self, gesture, n_press, x, y):
@@ -1907,11 +1981,13 @@ def build_app(opts, tips):
             if stamp != self._theme_stamp:
                 self._theme_stamp = stamp
                 themed = apply_theme()
+                self._palette += 1
                 if DEBUG:
                     debug("theme: reloaded %s (%s)", _theme_label(),
                           "applied" if themed else "unreadable, palette kept")
             refresh_suppressed(self.pet.tips)
-            return True
+            return self._reschedule("theme", self.poll_theme, 4,
+                                    GLib.get_monotonic_time() / 1e6)
 
         # -- context -----------------------------------------------------
         def poll_context(self):
@@ -1941,7 +2017,7 @@ def build_app(opts, tips):
             self.ctx_full = (cls, full)
 
             if not cls or cls == self.ctx_cls:
-                return True
+                return self._reschedule("context", self.poll_context, 2, now)
             self.ctx_cls = cls
             held = ("snoozing" if pet.snoozing(now)
                     else "away" if not pet.present(now)
@@ -1952,12 +2028,12 @@ def build_app(opts, tips):
                     else None)
             if held:
                 debug("context %r: held (%s)", cls, held)
-                return True
+                return self._reschedule("context", self.poll_context, 2, now)
             tip = pet.pick(cls=cls, context=full, why="contextual")
             if tip:
                 pet.say_tip(tip, 9.0, now)
                 self.ctx_offers[cls] = self.ctx_offers.get(cls, 0) + 1
-            return True
+            return self._reschedule("context", self.poll_context, 2, now)
 
         def intro(self):
             """Say hello once, ever — right click is his best feature and
@@ -1985,14 +2061,19 @@ def build_app(opts, tips):
             self.pet.step(dt, now,
                           self.area.get_width() or 1920,
                           self.area.get_height() or 1080)
-            surface = self.win.get_surface()
-            if surface is not None:
-                # Hidden means untouchable too: an empty region hands every
-                # click to whatever is underneath, not to an invisible deer.
-                region = cairo.Region(cairo.RectangleInt(
-                    int(self.pet.x), int(self.pet.y),
-                    int(self.pet.w), int(self.pet.h))) if visible else cairo.Region()
-                surface.set_input_region(region)
+            key = self.pet.render_key() + (self._palette,)
+            if key == self._key:
+                return True             # same pixels as last frame; no draw
+            if self._key is None or key[:2] != self._key[:2]:
+                surface = self.win.get_surface()
+                if surface is not None:
+                    # The input region follows him, and nothing else. Hidden
+                    # is handled in set_visible: an empty region hands every
+                    # click to whatever is underneath, not to an invisible deer.
+                    surface.set_input_region(cairo.Region(cairo.RectangleInt(
+                        int(self.pet.x), int(self.pet.y),
+                        int(self.pet.w), int(self.pet.h))))
+            self._key = key
             self.area.queue_draw()
             return True
 

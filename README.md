@@ -95,6 +95,15 @@ Try the knobs before committing to them:
 yoru --interval 20 --roam 20 --idle 0
 ```
 
+To update, pull and run it again — it reinstalls only when `yoru.py` has
+changed, and leaves everything else alone:
+
+```bash
+git pull && ./install.sh
+```
+
+`yoru --version` says what you have; put it in a bug report.
+
 `./uninstall.sh` reverses it — stops him, removes the binary and the
 autostart line — and asks before touching `~/.config/yoru`, which is yours:
 his position, what he has said, what you retired.
@@ -155,6 +164,8 @@ yoru --forget-known       # un-retire everything
 | `--no-basics` | | skip the sixteen first-hour tips he otherwise leads with |
 | `--no-packages` | | teach software whether or not `pacman` says it's installed |
 | `--start-hidden` | | begin off screen |
+| `--still` | | never walk, bound or graze — for anyone who finds movement at the edge of vision distracting; he still blinks and talks |
+| `--version` | | print the version and exit |
 | `--monitor` | focused | connector to live on, e.g. `DP-1`; if it isn't connected he warns and uses the focused output, so it's safe in `autostart.lua` |
 | `--verify-report` | | list the tips this machine's bindings rule out, and exit |
 | `--debug` | | log every decision to stderr with a timestamp — attach it to a bug report |
@@ -186,6 +197,14 @@ carry between outputs of different sizes — a corner on a 1080p screen is
 mid-screen on a scaled laptop panel. If the monitor he's on is unplugged, the
 compositor moves him to another and he pulls himself back inside its edges,
 so he stays visible and draggable.
+
+He is cheap to keep. A frame is drawn only when something in it changed — a
+blink, an ear, a step — so a parked deer redraws a few dozen times a minute,
+not thirty times a second. Hidden with `Super + Ctrl + Y` he does nothing at
+all: no stepping, no polling, until you bring him back, with everything as it
+was. When you're away, or he's snoozed, the compositor and theme polls slow
+from every few seconds to every thirty, and the first sign of you snaps them
+back — the window you came back to still gets its tip.
 
 ---
 

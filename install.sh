@@ -55,6 +55,7 @@ fi
 
 # -- report --------------------------------------------------------------------
 printf '%s\n' "${did[@]}"
+echo "$(python3 "$here/yoru.py" --version 2>/dev/null || echo yoru)"
 echo
 if pgrep -f -- "$bin" >/dev/null; then
   echo "He is already running. To pick up this version: pkill -f \"$bin\"; yoru &"

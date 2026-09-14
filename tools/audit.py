@@ -1,5 +1,5 @@
 import collections, datetime, glob, importlib.util, os, random, shutil
-import tempfile, types, sys, re
+import tempfile, types, sys, re, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REAL_HOME = os.environ.get("HOME", "")      # for the one check that reads a real user file
 os.environ["HOME"] = tempfile.mkdtemp()
@@ -281,4 +281,50 @@ ck("33 unknown --monitor never stops him", hit == "obj-dp8" and miss is None and
    and "DP-99" in warned and "eDP-1" in warned and "DP-8" in warned and "none" in warned
    and "sys.exit" not in resolver_src and ".quit(" not in resolver_src,
    "known -> pinned; unknown -> None with warning naming %s" % ", ".join(c for c, _ in fake))
+# --still: parked for a simulated hour with everything else running — no
+# walk, no bound, no graze, never off "home"; blinks still happen and a
+# tip still lands.
+q = m.Pet(types.SimpleNamespace(**dict(vars(O), still=True, interval=120)), m.KNOWLEDGE)
+q.seen = set(); q.saw_activity(0); q.present_until = 1e9
+q.step(.033, 0.0, 1920, 1080); x0, y0 = q.x, q.y
+moved = poses = modes = 0; blinks = spoke = 0; now = 0.0
+for i in range(int(3600 / .033)):
+    now += .033; was_b = q.blink > 0; q.step(.033, now, 1920, 1080)
+    if (q.x, q.y) != (x0, y0): moved += 1
+    if q.pose != "stand": poses += 1
+    if q.mode != "home": modes += 1
+    if q.blink > 0 and not was_b: blinks += 1
+    if q.text: spoke += 1
+ck("34 --still never moves", moved == 0 and poses == 0 and modes == 0 and blinks > 100 and spoke > 0,
+   "1h: moved %d frames, grazed %d, left home %d, blinked %d times, spoke %s"
+   % (moved, poses, modes, blinks, "yes" if spoke else "NO"))
+# Redraw-on-change: the key is stable across a static stretch and changes
+# on every frame of a walk, so skipping equal keys cannot drop motion.
+q = m.Pet(O, m.KNOWLEDGE); q.seen = set(); q.next_talk = 1e9; q.next_roam = 1e9; q.next_graze = 1e9
+q.blink = q.ear = q.tail = 0; q.next_blink = q.next_ear = q.next_tail = 1e9
+q.step(.033, 0.0, 1920, 1080); k = q.render_key(); static = all(
+    (q.step(.033, 1 + i * .033, 1920, 1080) or q.render_key()) == k for i in range(300))
+q.next_roam = 0; q.speed = 60; q.step(.033, 20.0, 1920, 1080)
+keys = []
+for i in range(60):
+    q.step(.033, 21 + i * .033, 1920, 1080); keys.append(q.render_key())
+walking = q.mode in ("out", "back") and len(set(keys)) > 40
+ck("35 redraw key: still when still, moving when moving", static and walking,
+   "300 static frames -> 1 key; 60 walking frames -> %d keys" % len(set(keys)))
+# Hidden does no work: with GTK loaded but no window, the app's scheduler
+# can still be driven. stop() must leave no sources and tick must not run.
+m._load_gtk()
+app = m.build_app(types.SimpleNamespace(**dict(vars(O), no_theme=False, no_context=False, quiet=False,
+                                                start_hidden=False, layer="overlay", monitor=None, topics="")),
+                  m.KNOWLEDGE)
+ticks = {"n": 0}
+app.tick = lambda: (ticks.__setitem__("n", ticks["n"] + 1) or True)
+app.poll_context = lambda: (ticks.__setitem__("n", ticks["n"] + 1) or False)
+app.poll_theme = lambda: (ticks.__setitem__("n", ticks["n"] + 1) or False)
+app.start(); started = set(app._sources)
+app.stop(); after_stop = dict(app._sources); ticks["n"] = 0     # start() polls context once, by design
+ctx = m.GLib.MainContext.default(); end = time.monotonic() + 0.4
+while time.monotonic() < end: ctx.iteration(False); time.sleep(0.01)
+ck("36 hidden does no work", "tick" in started and after_stop == {} and ticks["n"] == 0,
+   "sources while shown %s; after stop %s; callbacks in 0.4s hidden: %d" % (sorted(started), after_stop, ticks["n"]))
 print("\n%d/%d  FAILURES: %s" % (N - len(F), N, F or "none"))

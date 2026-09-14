@@ -342,7 +342,7 @@ KNOWLEDGE = [
     ("windows", None, "Super + Space", "The Omarchy menu. Almost everything starts here, which is the point of it."),
     ("windows", None, "Super + Alt + Space", "The apps menu, for when you already know what you want."),
     ("windows", None, "Super + Escape", "Lock, suspend, hibernate, log out, reboot, shut down. Screensaver, if you want a show."),
-    ("windows", None, "Super + Ctrl + L", "Lock the screen."),
+    ("windows", None, "Super + Ctrl + L", "Lock the screen. The idle timer that does it for you is in shell.json."),
     ("windows", None, "Super + W", "Close the window. No confirmation dialog. There was never going to be one."),
     ("windows", None, "Ctrl + Alt + Del", "Closes every window. The nuclear option, kept where you can reach it."),
     ("windows", None, "Super + T", "Toggle a window between tiling and floating. Floating is a temporary condition."),
@@ -365,7 +365,7 @@ KNOWLEDGE = [
     ("windows", None, "Alt + Tab", "Cycle windows here. Ctrl + Alt + Tab cycles monitors. Old habits, honoured."),
     ("windows", None, "Super + Backspace", "Toggle transparency. Looks incredible, reads terribly. Use sparingly."),
     ("windows", None, "Super + Shift + Backspace", "Toggle window gaps. Gaps are taste, not function. Have taste anyway."),
-    ("windows", None, "Super + Ctrl + Backspace", "Toggle single-window square aspect."),
+    ("windows", None, "Super + Ctrl + Backspace", "Toggle single-window square aspect. A lone window shouldn't span an ultrawide."),
 
     # ------------------------------------------------------- workspaces ----
     ("workspaces", None, "Super + 1/2/3/4", "Jump to a workspace. Add Shift to bring the window. You will use four of the ten."),
@@ -377,7 +377,7 @@ KNOWLEDGE = [
 
     # ----------------------------------------------------------- panels ----
     ("panels", None, "Super + Ctrl + W", "Wifi panel. A audio, B bluetooth, D display, P power."),
-    ("panels", None, "Super + Ctrl + Alt + D", "The calendar panel."),
+    ("panels", None, "Super + Ctrl + Alt + D", "The calendar panel. Clicking the clock opens it too."),
     ("panels", None, "Super + Ctrl + 1-9", "Toggle a bar panel by position, counting from the right section."),
     ("panels", None, "Super + Ctrl + T", "Activity — btop. It floats. Super + T tiles it, because everything should tile."),
     ("panels", None, "Super + Ctrl + Q", "Calculator. Super + Ctrl + E is emoji. Both faster than opening a browser tab."),
@@ -387,7 +387,7 @@ KNOWLEDGE = [
 
     # ---------------------------------------------------------- capture ----
     ("capture", None, "Print Screen", "Screenshot. Alt + Print Screen records; press it again to stop. That's the whole thing."),
-    ("capture", None, "Super + Print Screen", "Colour picker."),
+    ("capture", None, "Super + Print Screen", "Colour picker. The value goes to the clipboard and nowhere else."),
     ("capture", None, "Super + Ctrl + Print Screen", "OCR the screen to the clipboard. Text out of a picture, no subscription required."),
     ("capture", None, "Super + Ctrl + C", "Capture menu, for keyboards with no Print Screen key."),
     ("capture", None, "Super + Alt + [", "Shrinks the webcam overlay while recording. ] grows it."),
@@ -396,13 +396,13 @@ KNOWLEDGE = [
     ("browser", WEB, "Alt + Shift + D", "Download the video on this page to ~/Videos."),
 
     # -------------------------------------------------------- clipboard ----
-    ("clipboard", None, "Super + C", "Copy. Super + V pastes. They work in the terminal too."),
+    ("clipboard", None, "Super + C", "Copy. Super + V pastes. They work in the terminal too, which is rarer than you'd think."),
     ("clipboard", None, "Super + X", "Cut — the one that doesn't work in the terminal."),
     ("clipboard", None, "Super + Ctrl + V", "Clipboard history, images included. It remembers more than you do."),
 
     # ---------------------------------------------------- notifications ----
     ("notifications", None, "Super + ,", "Dismiss the latest notification. Shift dismisses all of them."),
-    ("notifications", None, "Super + Alt + ,", "Invoke the most recent notification."),
+    ("notifications", None, "Super + Alt + ,", "Invoke the most recent notification. No hunting for a toast that went away."),
     ("notifications", None, "Super + Ctrl + ,", "Silence notifications. Super + Shift + Alt + , shows what you ignored."),
 
     # ------------------------------------------------------------ style ----
@@ -440,7 +440,7 @@ KNOWLEDGE = [
     ("apps", None, "Omacut", "Trims a video's length. Built on ffmpeg, minus the ffmpeg."),
 
     # ------------------------------------------------------------ setup ----
-    ("setup", None, "Install > Editor", "VSCode, Cursor, Zed, Sublime Text, Helix, Vim and Emacs."),
+    ("setup", None, "Install > Editor", "VSCode, Cursor, Zed, Sublime Text, Helix, Vim and Emacs. Neovim's already here."),
     ("setup", None, "Install > Package", "Anything in Arch. Install > AUR when it isn't in the main repos."),
     ("setup", None, "Install > TUI", "Give a terminal program a name and an icon and it's an app. That's all an app ever was."),
     ("setup", None, "Install > Web App", "A URL with a name and an icon. Most desktop apps are this wearing a costume."),
@@ -499,7 +499,7 @@ KNOWLEDGE = [
 
     # -------------------------------------------------- shell functions ----
     ("shell", TERM, "compress [file/dir]", "A tar.gz without the flag archaeology. decompress unpacks it."),
-    ("shell", TERM, "iso2sd [image.iso]", "A bootable drive, with the target picked interactively."),
+    ("shell", TERM, "iso2sd [image.iso]", "A bootable drive, with the target picked interactively. There's no dd flag to get wrong."),
     ("shell", TERM, "format-drive", "Run it bare to list drives first. One exFAT partition. Read that sentence twice."),
     ("shell", TERM, "ga [branch]", "A worktree and branch beside the repo, and jumps you in. gd removes it."),
     ("shell", TERM, "rsw [source] [destination]", "Rsyncs on every change, remote host and all. lsw lists, dsw stops."),
@@ -537,7 +537,7 @@ KNOWLEDGE = [
     ("agents", None, "A crash notification", "Click it and your agent is handed the core dump to explain."),
     ("agents", AGENT, "Agent skills", "Omarchy ships two — omarchy and diagnose-crash — symlinked into each harness."),
     ("agents", AGENT, "Agent theming", "Claude Code, Pi, OpenCode and Hermes follow your Omarchy theme."),
-    ("agents", AGENT, "LM Studio", "That or Ollama, for running open-weight models on this machine."),
+    ("agents", AGENT, "LM Studio", "That or Ollama, for running open-weight models on this machine. No key, no meter."),
 
     # ---------------------------------------------------------- ghostty ----
     ("ghostty", ("ghostty",), "Ctrl + Shift + E", "New split below. Ctrl + Shift + O splits beside."),
@@ -589,26 +589,25 @@ CHATTER = [
     "Every program has a tiny essence that justifies it. The rest is someone's résumé.",
     "Your entire desktop is config files and good taste. That's the trick. That's the whole trick.",
     "Somewhere a team of forty is shipping a settings panel. You have a text file.",
-    "Zero bloat here. Just everything he uses. That's a bolder promise than it sounds.",
+    "Zero bloat here. Nothing ships that nobody uses. A bolder promise than it sounds.",
     "Somewhere a man is paying monthly to edit text. You are not that man.",
     "Nothing here phones home. I checked. I'm the only one watching, and I'm facing the wall.",
     "The cloud is someone else's computer, and they have started charging you rent.",
     "This desktop boots before most web apps finish showing you their loading spinner.",
     "The whole shell fits in less memory than one browser tab. Sit with that.",
     "Better a kick-ass half than a half-assed whole. Ship the half. Ship it tonight.",
-    "Planning is guessing with extra steps. You have been planning that thing a while now.",
+    "Planning is guessing with extra steps. You've been planning that thing for a while.",
     "Nobody is an overnight success. They were all nobody for about ten years first.",
     "Workaholics don't finish more. They just sleep less and have more opinions.",
-    "It was never about eight hours in a chair. It's whether the hours were any good.",
-    "A beautiful system is a motivating system. That isn't decoration, it's the argument.",
+    "It was never about eight hours in a chair. It's about whether they were any good.",
+    "A beautiful system is a motivating system. That isn't decoration. It's the argument.",
     "You can spot bad code before you read a line of it. The indentation confesses.",
     "Good code reads like good writing. Fewer words. Then take out two more.",
     "Neovim. Btw.",
     "Yes, you edit config files by hand here. That's not a bug report. That's the point.",
     "Omakase: the chef chooses. You may disagree, but not before you've tried it.",
-    "This isn't trying to be Windows. It's trying to be better. Different ambition entirely.",
-    "The man who built this won Le Mans. Endurance and efficiency. Explains a few things.",
-    "He writes less of the code himself now. Same standards though. People skip that part.",
+    "Every keybinding you learn is one you keep. Not true of most things you learn.",
+    "An hour of reading the manual saves a week of wondering. Nobody does it anyway.",
     "An agent can type it. Taste is still yours. Nobody has automated taste.",
     "My ancestor asked if you were writing a letter. I will never ask you anything.",
     "The paperclip was hated for interrupting, not for being a paperclip. I took notes.",
@@ -636,7 +635,7 @@ POKES = [
     "I was watching the workspaces. They're fine.",
     "Right click me if you want something useful.",
     "I'm not a button.",
-    "Poke a paperclip and it offered you a letter template. You got me instead.",
+    "Poke a paperclip and it offers you a letter template. You got me instead.",
 ]
 
 

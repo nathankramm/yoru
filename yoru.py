@@ -776,6 +776,63 @@ def own_bind_tips(path=OWN_BINDS, knowledge=None):
 # verifier's own set changes.
 rebound = {}                    # curated tip id -> reason
 
+# Tips that are useless without a package: the key launches it, the tip is
+# about using it, or the command named is that program. A passing mention
+# does not count — the Signal in the 1Password tip, the Spotify in the
+# lazydocker one — and neither does anything on the base list nobody removes
+# (tmux, foot, fzf: Ctrl + R still searches history without fzf, it is just
+# less good). Names are what Omarchy's own installers use.
+NEEDS = {
+    "ghostty": ["ghostty:Ctrl + Shift + E", "ghostty:Ctrl + Shift + T",
+                "ghostty:Super + Ctrl + Shift + Arrows", "ghostty:Shift + Pg Up/Down"],
+    "1password": ["apps:Super + Shift + /"],
+    "lazydocker": ["apps:Super + Shift + D", "docker:s"],
+    "cliamp": ["apps:Super + Shift + Alt + M"],
+    "omawrite": ["apps:Super + Shift + W"],
+    "obsidian": ["style:Obsidian"],
+    "spotify": ["fixes:Ctrl + Minus"],
+    "omacut": ["apps:Omacut"],
+    "dua-cli": ["apps:Disk Usage"],
+    "voxtype": ["capture:Super + Ctrl + X"],
+    "herdr": ["herdr:Super + Ctrl + Return", "herdr:hdl", "apps:Super + Ctrl + Return"],
+    "lazygit": ["git:Tab", "neovim:Space G G"],
+    "tesseract": ["capture:Super + Ctrl + Print Screen"],
+}
+absent = {}                     # tip id -> reason, from one pacman query
+
+
+def installed_packages():
+    """Names from `pacman -Qq`, or None when that can't be known. None
+    means suppress nothing: a tip about software that might be missing
+    beats withholding one about software that is there."""
+    try:
+        r = subprocess.run(["pacman", "-Qq"], capture_output=True, text=True, timeout=5)
+    except Exception:
+        return None
+    if r.returncode != 0 or not r.stdout.strip():
+        return None
+    return set(r.stdout.split())
+
+
+def missing_package_tips(packages, needs=NEEDS):
+    """{tip id: reason} for every tip whose package is not in `packages`."""
+    if packages is None:
+        return {}
+    return {tid: "%s: needs %s, not installed" % (tid.split(":", 1)[1], pkg)
+            for pkg, tids in needs.items() if pkg not in packages for tid in tids}
+
+
+def load_packages():
+    packages = installed_packages()
+    if packages is None:
+        debug("packages: pacman unavailable, suppressing nothing")
+        return
+    absent.update(missing_package_tips(packages))
+    for tid, why in sorted(absent.items()):
+        debug("packages: withholding %s (%s)", tid, why)
+    debug("packages: %d installed, %d tips withheld", len(packages), len(absent))
+    suppressed.update(absent)
+
 
 def load_own_binds():
     tips, replaced = own_bind_tips()
@@ -1430,10 +1487,12 @@ def refresh_suppressed(tips):
                   len(suppressed))
         refresh_suppressed.blind = True
         suppressed.update(rebound)  # can't see the compositor: change nothing
-        return                      # else; a rebind needs no compositor
+        suppressed.update(absent)   # else; neither of these needs it
+        return
     refresh_suppressed.blind = False
     fresh = verify_tips(tips, binds)
     fresh.update(rebound)
+    fresh.update(absent)
     if DEBUG and fresh != suppressed:
         debug("suppression: %d of %d tips withheld against %d live binds",
               len(fresh), len(tips), len(binds))
@@ -1456,12 +1515,16 @@ def cmd_verify_report(tips):
     scoped = [t for t in tips if t[0] in HYPR_TOPICS and parse_keys(t[2])]
     gone = verify_tips(tips, binds)
     gone.update(rebound)
+    gone.update(absent)
     for t in tips:
         if tip_id(t) in gone:
             print("  %-13s %s" % (t[0], gone[tip_id(t)]))
-    print("\n%d live key combos; %d of %d Hyprland-scope tips suppressed; "
+    unbound = len(gone) - len(rebound) - len(absent)
+    print("\n%d live key combos; %d of %d Hyprland-scope tips unbound here; "
+          "%d rebound in your bindings.lua; %d need software that isn't installed; "
           "%d other tips never checked."
-          % (len(binds), len(gone), len(scoped), len(tips) - len(scoped)))
+          % (len(binds), unbound, len(scoped), len(rebound), len(absent),
+             len(tips) - len(scoped)))
     return 0
 
 
@@ -1487,6 +1550,8 @@ def main(argv=None):
                    help="ignore the focused window entirely")
     p.add_argument("--no-own", action="store_true",
                    help="don't make tips from your own ~/.config/hypr/bindings.lua")
+    p.add_argument("--no-packages", action="store_true",
+                   help="teach software whether or not pacman says it's installed")
     p.add_argument("--no-basics", action="store_true",
                    help="skip the first-hour tips; you already know Omarchy")
     p.add_argument("--quiet", action="store_true",
@@ -1532,6 +1597,8 @@ def main(argv=None):
         return 1
     if opts.quiet:
         opts.interval = 1e9
+    if not opts.no_packages:
+        load_packages()
     if opts.verify_report:
         return cmd_verify_report(tips)
 

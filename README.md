@@ -153,6 +153,7 @@ yoru --forget-known       # un-retire everything
 | `--no-theme` | | keep the built-in palette |
 | `--no-own` | | don't turn your own `~/.config/hypr/bindings.lua` binds into tips |
 | `--no-basics` | | skip the sixteen first-hour tips he otherwise leads with |
+| `--no-packages` | | teach software whether or not `pacman` says it's installed |
 | `--start-hidden` | | begin off screen |
 | `--monitor` | focused | connector to live on, e.g. `DP-1` |
 | `--verify-report` | | list the tips this machine's bindings rule out, and exit |
@@ -276,8 +277,11 @@ The next versions are about making him yours rather than generic.
   description table: a key in your own `~/.config/hypr/bindings.lua` is one
   you rebound, so your description replaces the curated tip. See
   [Your bindings](#your-bindings).
-- **Drop what you haven't installed.** A `pacman -Qq` check at startup should
-  retire whole topics — no Ghostty tips on a Foot machine.
+- ~~**Drop what you haven't installed.**~~ Done. One `pacman -Qq` at startup
+  withholds the tips that are useless without a package that isn't there —
+  no Ghostty tips on a Foot machine, no 1Password tip without 1Password.
+  Twenty tips over thirteen packages; `--verify-report` says which and why;
+  `--no-packages` turns it off.
 - **Weight by what you actually use.** He already watches window focus; over
   weeks that's a real usage model, not uniform random.
 - **Generate tips from your own configs** — `bindings.lua` is done (above);

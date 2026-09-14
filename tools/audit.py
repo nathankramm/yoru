@@ -1,5 +1,5 @@
 import collections, datetime, glob, importlib.util, os, random, shutil
-import tempfile, types, sys
+import tempfile, types, sys, re
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REAL_HOME = os.environ.get("HOME", "")      # for the one check that reads a real user file
 os.environ["HOME"] = tempfile.mkdtemp()
@@ -245,4 +245,24 @@ grow_ok = (q2.x, q2.y) == was
 ck("31 migration to a smaller surface keeps him reachable", migrated and region_ok and walk_ok and grow_ok,
    "after 1920x1054 -> 1280x774: at (%d,%d), home (%d,%d), region %s; walk from y=900 -> y=%d; grow %s"
    % (landed + (region, q.y, "unchanged" if grow_ok else "MOVED")))
+# The package check. Every mapped id is a real tip and every package name is
+# shaped like one; a fake installed set withholds exactly the tips of the
+# packages it lacks; an unknowable set (pacman missing or failing) withholds
+# nothing. The live query is exercised too, once, so a broken pacman call
+# shows up here rather than as a silent no-op on every machine.
+ids_all = {m.tip_id(t) for t in m.KNOWLEDGE}
+mapped = [tid for tids in m.NEEDS.values() for tid in tids]
+map_ok = all(tid in ids_all for tid in mapped) and len(mapped) == len(set(mapped)) \
+    and all(re.fullmatch(r"[a-z0-9][a-z0-9.+_-]*", pkg) for pkg in m.NEEDS)
+have = set(m.NEEDS) - {"ghostty", "spotify"}
+gone = m.missing_package_tips(have)
+expect = set(m.NEEDS["ghostty"]) | set(m.NEEDS["spotify"])
+fake_ok = set(gone) == expect and all(v.endswith("not installed") for v in gone.values())
+open_ok = m.missing_package_tips(None) == {} and m.missing_package_tips(set(m.NEEDS)) == {}
+live = m.installed_packages()
+live_ok = live is None or (len(live) > 100 and "pacman" in live)
+ck("32 missing software withholds only its own tips", map_ok and fake_ok and open_ok and live_ok,
+   "%d tips over %d packages; fake set -> %d withheld as expected; pacman unavailable -> 0; live query: %s"
+   % (len(mapped), len(m.NEEDS), len(gone),
+      "%d packages" % len(live) if live else "unavailable (fails open)"))
 print("\n%d/%d  FAILURES: %s" % (N - len(F), N, F or "none"))

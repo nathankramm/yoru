@@ -7,7 +7,9 @@ Omarchy. He knows 189 things about it, notices which app you're in,
 follows your theme, and — unlike his spiritual ancestor — shuts up when you
 tell him to.
 
-https://github.com/nathankramm/yoru/raw/main/docs/yoru-motion.mp4
+![Yoru grazing, speaking and bounding](docs/yoru-motion.gif)
+
+<sub>Sixteen seconds. Smaller and sharper as [MP4](docs/yoru-motion.mp4).</sub>
 
 ---
 

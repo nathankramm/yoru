@@ -133,6 +133,21 @@ yoru --forget-known       # un-retire everything
 The keybind sends `SIGUSR1` and the process keeps running, so his position,
 snooze state and which tips he's seen all survive.
 
+Not everything he says is a tip. Some of it is just him, and how much shifts
+over time: a new user gets almost all keybindings — remarks are about 15% of it —
+and the share climbs to roughly 40% once you've worked through the manual. He
+keeps teaching first, and gets more opinionated as the teaching runs out.
+
+---
+
+## The deer
+
+He parks facing away from your screen and turns to you only when he has
+something to say. Left alone he drops his head and grazes, and his ears and
+tail twitch the way a standing deer's do. Most of his walks are a trot; about
+one in five, he spooks himself and bounds instead, tail flagged. None of it
+does anything. It's just him.
+
 ---
 
 ## Context awareness
@@ -165,8 +180,10 @@ had, is withheld, so he never teaches you a binding you've rebound away.
 
 Only tips in Hyprland topics are checked. tmux, Neovim, Ghostty, lazygit and
 shell keys look the same but belong to their own programs and are left alone,
-as are your own tips. If `hyprctl` is missing or its output can't be read,
-nothing is withheld.
+as are your own tips. So are the Chromium extension bindings (`Alt + Shift + L`,
+`Alt + Shift + D`): they never appear in `hyprctl binds`, so they're filed as
+browser tips rather than compositor ones and aren't checked against it. If
+`hyprctl` is missing or its output can't be read, nothing is withheld.
 
 `yoru --verify-report` prints exactly what he's holding back and why.
 `--list` and `--ask` still show everything — suppression only applies to what

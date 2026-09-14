@@ -238,30 +238,65 @@ GAIT = [
 BOB = [0, -1, 0, -1]
 
 
-def _leg(out, ax, d1, d2, col, hoof):
+def _leg(out, ax, d1, d2, col, hoof, lift=0):
     for y in range(18, 21):
         for i in range(2):
-            out.append((ax + d1 + i, y, col))
+            out.append((ax + d1 + i, y + lift, col))
     for y in range(21, 23):
         for i in range(2):
-            out.append((ax + d2 + i, y, col))
+            out.append((ax + d2 + i, y + lift, col))
     for i in range(2):
-        out.append((ax + d2 + i, 23, hoof))
+        out.append((ax + d2 + i, 23 + lift, hoof))
+# A bound is not a faster trot. The legs pair up front and back and the whole
+# body leaves the ground, which is why a startled deer reads as a deer.
+BOUND = [
+    dict(r1=1, r2=2, f1=-1, f2=-2, lift=-2),   # tucked, airborne
+    dict(r1=0, r2=1, f1=0, f2=-1, lift=-1),
+    dict(r1=-1, r2=-2, f1=1, f2=2, lift=0),    # reaching, landing
+    dict(r1=0, r2=0, f1=0, f2=0, lift=-1),
+]
 
 
-def pixels(frame, blink):
+# Rows 0-11 are everything forward of the shoulder: antlers, skull, neck.
+# Grazing swings that whole assembly down and out rather than redrawing it,
+# which keeps one animal instead of two that only mostly match.
+GRAZE_SHIFT = (2, 4)
+
+
+def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False):
     out = []
-    near, far = GAIT[frame], GAIT[(frame + 2) % 4]
-    _leg(out, 6, far["r1"], far["r2"], FAR, FAR_HOOF)
-    _leg(out, 10, far["f1"], far["f2"], FAR, FAR_HOOF)
-    bob = BOB[frame]
+    gait = BOUND if bound else GAIT
+    near, far = gait[frame], gait[(frame + 2) % 4]
+    # In a bound the animal leaves the ground, so the legs rise with the body;
+    # lifting the body alone just severs them.
+    lift = near.get("lift", 0) if bound else 0
+    bob = (0 if bound else BOB[frame]) + lift
+
+    _leg(out, 6, far["r1"], far["r2"], FAR, FAR_HOOF, lift)
+    _leg(out, 10, far["f1"], far["f2"], FAR, FAR_HOOF, lift)
+
+    grazing = pose == "graze"
     for y, row in enumerate(BODY):
         for x, ch in enumerate(row):
             if ch == ".":
                 continue
-            out.append((x, y + bob, PAL["b"] if (ch == "e" and blink) else PAL[ch]))
-    _leg(out, 3, near["r1"], near["r2"], PAL["b"], HOOF)
-    _leg(out, 13, near["f1"], near["f2"], PAL["b"], HOOF)
+            col = PAL["b"] if (ch == "e" and blink) else PAL[ch]
+            dx, dy = 0, 0
+            if grazing and y <= 11:
+                dx, dy = GRAZE_SHIFT
+            elif ear and y == 6 and x == 14:
+                out.append((x - 1, y + bob - 1, col))   # ear pricks up and back
+            out.append((x + dx, y + bob + dy, col))
+
+    # A raised tail is the real signal a deer gives. Add to it, don't move it,
+    # or the rump grows a gap.
+    if tail and not grazing:
+        for x in range(2):
+            out.append((x, 10 + bob, PAL["c"]))
+            out.append((x, 11 + bob, PAL["c"]))
+
+    _leg(out, 3, near["r1"], near["r2"], PAL["b"], HOOF, lift)
+    _leg(out, 13, near["f1"], near["f2"], PAL["b"], HOOF, lift)
     return out
 
 
@@ -275,22 +310,22 @@ AGENT = TERM + ("org.omarchy.agent", "opencode", "claude", "codex", "crush")
 # Every entry below was checked against the Omarchy 4 (Quattro) manual.
 KNOWLEDGE = [
     # ---------------------------------------------------------- windows ----
-    ("windows", None, "Super + K", "Every keybinding, all at once. Alt + K for tmux, Ctrl + K for Herdr."),
-    ("windows", None, "Super + Space", "The Omarchy menu. Almost everything starts here."),
+    ("windows", None, "Super + K", "Every keybinding at once. Alt + K for tmux, Ctrl + K for Herdr. Nobody memorises all of them."),
+    ("windows", None, "Super + Space", "The Omarchy menu. Almost everything starts here, which is the point of it."),
     ("windows", None, "Super + Alt + Space", "The apps menu, for when you already know what you want."),
-    ("windows", None, "Super + Escape", "System menu. Suspend, restart, relaunch Hyprland."),
+    ("windows", None, "Super + Escape", "Suspend, restart, relaunch Hyprland. The third one fixes more than you'd think."),
     ("windows", None, "Super + Ctrl + L", "Lock the screen."),
-    ("windows", None, "Super + W", "Close the window. Super + Q does the same thing."),
-    ("windows", None, "Ctrl + Alt + Del", "Closes every window. Consider this carefully."),
-    ("windows", None, "Super + T", "Toggle a window between tiling and floating."),
+    ("windows", None, "Super + W", "Close the window. Super + Q does the same, which suggests someone was hedging."),
+    ("windows", None, "Ctrl + Alt + Del", "Closes every window. The nuclear option, kept where you can reach it."),
+    ("windows", None, "Super + T", "Toggle a window between tiling and floating. Floating is a temporary condition."),
     ("windows", None, "Super + J", "Toggle the split between horizontal and vertical."),
-    ("windows", None, "Super + F", "Go full screen. Super + Alt + F goes full width instead."),
+    ("windows", None, "Super + F", "Full screen. Super + Alt + F goes full width, which is the one you actually want."),
     ("windows", None, "Super + Ctrl + F", "Full screen inside the window's own frame."),
-    ("windows", None, "Super + Ctrl + Alt + F", "Full screen desktop — drops the top bar and the gaps."),
+    ("windows", None, "Super + Ctrl + Alt + F", "Full screen desktop — bar gone, gaps gone. Nothing left but the work."),
     ("windows", None, "Super + L", "Toggle between the dwindle and scrolling layouts."),
-    ("windows", None, "Super + P", "Pseudo window style — natural size rather than stretched."),
-    ("windows", None, "Super + O", "Pop a window into sticky and floating. It follows you around."),
-    ("windows", None, "Super + G", "Toggle window grouping. Super + Alt + G moves one back out."),
+    ("windows", None, "Super + P", "Pseudo window style. The window gets its natural size instead of being stretched thin."),
+    ("windows", None, "Super + O", "Pop a window out sticky and floating. It follows you everywhere, like me."),
+    ("windows", None, "Super + G", "Group windows into tabs. Super + Alt + G lets one back out again."),
     ("windows", None, "Super + Alt + Tab", "Cycle a group. Super + Alt + 1/2/3/4/5 jumps to one."),
     ("windows", None, "Super + Ctrl + Left/Right", "Move between the windows inside a tiling group."),
     ("windows", None, "Super + Arrow", "Move focus. Super + Shift + Arrow swaps the two windows."),
@@ -298,130 +333,130 @@ KNOWLEDGE = [
     ("windows", None, "Super + Alt + Minus/Equal", "The same resizing in smaller steps. Ctrl for bigger ones."),
     ("windows", None, "Super + Alt + Home", "Save this window's width. Super + Home restores it."),
     ("windows", None, "Super + Left Mouse", "Drag the window around. Super + Right Mouse resizes it."),
-    ("windows", None, "Super + Ctrl + Z", "Zoom in on the screen, repeatedly. Ctrl + Alt + Z zooms fully out."),
+    ("windows", None, "Super + Ctrl + Z", "Zoom into the screen, repeatedly. Ctrl + Alt + Z admits defeat and zooms out."),
     ("windows", None, "Super + /", "Step through monitor scaling. Super + Alt + / steps back."),
-    ("windows", None, "Alt + Tab", "Cycle windows on this workspace. Ctrl + Alt + Tab cycles monitors."),
-    ("windows", None, "Super + Backspace", "Toggle transparency on a window."),
-    ("windows", None, "Super + Shift + Backspace", "Toggle window gaps."),
+    ("windows", None, "Alt + Tab", "Cycle windows here. Ctrl + Alt + Tab cycles monitors. Old habits, honoured."),
+    ("windows", None, "Super + Backspace", "Toggle transparency. Looks incredible, reads terribly. Use sparingly."),
+    ("windows", None, "Super + Shift + Backspace", "Toggle window gaps. Gaps are taste, not function. Have taste anyway."),
     ("windows", None, "Super + Ctrl + Backspace", "Toggle single-window square aspect."),
 
     # ------------------------------------------------------- workspaces ----
-    ("workspaces", None, "Super + 1/2/3/4", "Jump to a workspace. Add Shift to move the window there."),
+    ("workspaces", None, "Super + 1/2/3/4", "Jump to a workspace. Add Shift to bring the window. You will use four of the ten."),
     ("workspaces", None, "Super + Shift + Alt + 1/2/3/4", "Move a window to a workspace without following it."),
     ("workspaces", None, "Super + Tab", "Next workspace. Shift for previous, Ctrl for the former one."),
-    ("workspaces", None, "Super + S", "Toggle the scratchpad. Super + Alt + S moves a window into it."),
-    ("workspaces", None, "Super + Scroll Wheel", "Scroll through your workspaces."),
+    ("workspaces", None, "Super + S", "The scratchpad. Super + Alt + S throws a window in. Where things go to be forgotten."),
+    ("workspaces", None, "Super + Scroll Wheel", "Scroll through workspaces. The one concession to the mouse in this whole place."),
     ("workspaces", None, "Super + Shift + Alt + Arrows", "Move workspaces to the monitor in that direction."),
 
     # ----------------------------------------------------------- panels ----
     ("panels", None, "Super + Ctrl + W", "Wifi panel. A audio, B bluetooth, D display, P power."),
     ("panels", None, "Super + Ctrl + Alt + D", "The calendar panel."),
     ("panels", None, "Super + Ctrl + 1-9", "Toggle a bar panel by position, counting from the right section."),
-    ("panels", None, "Super + Ctrl + T", "Activity — btop. It floats; Super + T tiles it."),
-    ("panels", None, "Super + Ctrl + Q", "Calculator. Super + Ctrl + E is the emoji picker."),
+    ("panels", None, "Super + Ctrl + T", "Activity — btop. It floats. Super + T tiles it, because everything should tile."),
+    ("panels", None, "Super + Ctrl + Q", "Calculator. Super + Ctrl + E is emoji. Both faster than opening a browser tab."),
     ("panels", None, "Super + Ctrl + H", "Hardware menu. Super + Ctrl + O is the toggle menu."),
-    ("panels", None, "Super + Ctrl + S", "Share menu, via LocalSend, to anything else on your network."),
-    ("panels", None, "Super + Ctrl + .", "Transcode media without remembering a single ffmpeg flag."),
+    ("panels", None, "Super + Ctrl + S", "Share a file to anything else on your network. No account, no upload, no cloud."),
+    ("panels", None, "Super + Ctrl + .", "Transcode media without learning a single ffmpeg flag. Nobody has learned them."),
 
     # ---------------------------------------------------------- capture ----
-    ("capture", None, "Print Screen", "Screenshot. Alt + Print Screen records; hit it again to stop."),
+    ("capture", None, "Print Screen", "Screenshot. Alt + Print Screen records; press it again to stop. That's the whole thing."),
     ("capture", None, "Super + Print Screen", "Colour picker."),
-    ("capture", None, "Super + Ctrl + Print Screen", "Text extraction — OCR straight to the clipboard."),
+    ("capture", None, "Super + Ctrl + Print Screen", "OCR the screen to the clipboard. Text out of a picture, no subscription required."),
     ("capture", None, "Super + Ctrl + C", "Capture menu, for keyboards with no Print Screen key."),
     ("capture", None, "Super + Alt + [", "Shrinks the webcam overlay while recording. ] grows it."),
     ("capture", None, "Super + Ctrl + X", "Start and stop dictation. F9 is push to talk."),
-    ("capture", WEB, "Alt + Shift + L", "Copy the current URL from a web app or Chromium."),
-    ("capture", WEB, "Alt + Shift + D", "Download the video on this page to ~/Videos."),
+    ("browser", WEB, "Alt + Shift + L", "Copy the current URL from a web app or Chromium."),
+    ("browser", WEB, "Alt + Shift + D", "Download the video on this page to ~/Videos."),
 
     # -------------------------------------------------------- clipboard ----
     ("clipboard", None, "Super + C", "Copy. Super + V pastes. They work in the terminal too."),
     ("clipboard", None, "Super + X", "Cut — the one that doesn't work in the terminal."),
-    ("clipboard", None, "Super + Ctrl + V", "Clipboard manager. It holds images as well as text."),
+    ("clipboard", None, "Super + Ctrl + V", "Clipboard history, images included. It remembers more than you do."),
 
     # ---------------------------------------------------- notifications ----
     ("notifications", None, "Super + ,", "Dismiss the latest notification. Shift dismisses all of them."),
     ("notifications", None, "Super + Alt + ,", "Invoke the most recent notification."),
-    ("notifications", None, "Super + Ctrl + ,", "Toggle silencing. Super + Shift + Alt + , opens the history."),
+    ("notifications", None, "Super + Ctrl + ,", "Silence notifications. Super + Shift + Alt + , shows what you ignored."),
 
     # ------------------------------------------------------------ style ----
-    ("style", None, "Super + Ctrl + Shift + Space", "Pick a new theme. Super + Ctrl + Space picks the background."),
-    ("style", None, "Super + Shift + Space", "Toggle the top bar."),
+    ("style", None, "Super + Ctrl + Shift + Space", "Pick a theme. Super + Ctrl + Space picks the background. Beauty motivates, not decorates."),
+    ("style", None, "Super + Shift + Space", "Toggle the top bar. Nothing up there was ever that urgent."),
     ("style", None, "~/.config/omarchy/backgrounds", "Extras go in the subfolder named for the theme, like /nord."),
-    ("style", None, "A theme", "Styles the desktop, terminal, neovim, btop, Chromium and the whole shell."),
-    ("style", None, "Obsidian", "The exception — pick the Omarchy theme by hand in Appearance > Themes."),
+    ("style", None, "A theme", "Restyles the desktop, terminal, neovim, btop, Chromium and the shell. All of it, at once."),
+    ("style", None, "Obsidian", "The one holdout — set the Omarchy theme by hand in Appearance > Themes."),
 
     # ---------------------------------------------------------- toggles ----
     ("toggles", None, "Super + Ctrl + N", "Nightlight. It is later than you think."),
-    ("toggles", None, "Super + Ctrl + I", "Toggle locking on idle."),
+    ("toggles", None, "Super + Ctrl + I", "Stop the screen locking on idle. For demos, not for cafés."),
     ("toggles", None, "Super + Ctrl + Delete", "Laptop display on and off. Add Alt to mirror it."),
     ("toggles", None, "Shift + Mute", "Next audio output. Shift + Play switches media source."),
     ("toggles", None, "Alt + Play", "Next track. Alt + Shift + Play goes back."),
-    ("toggles", None, "Alt + Brightness Up/Down", "Precise 1% steps. Shift jumps to maximum or minimum."),
+    ("toggles", None, "Alt + Brightness Up/Down", "One percent at a time, for the perfectionists. Shift jumps to the extremes."),
 
     # -------------------------------------------------------- reminders ----
     ("reminders", None, "Super + Ctrl + R", "Set a reminder. Ctrl + Alt + R sees all, Ctrl + Shift + R clears."),
     ("reminders", None, "Super + Ctrl + Alt + T", "Time as a notification. B battery, W weather."),
 
     # ------------------------------------------------------------- apps ----
-    ("apps", None, "Super + Return", "Terminal. Super + Alt + Return opens it in tmux."),
+    ("apps", None, "Super + Return", "Terminal. Super + Alt + Return opens it in tmux, which is where you'll end up anyway."),
     ("apps", None, "Super + Ctrl + Return", "Herdr, the agent manager, still running from last time."),
     ("apps", None, "Super + Shift + Return", "Browser. Super + Shift + Alt + B for private."),
     ("apps", None, "Super + Shift + F", "File manager. Add Alt to open it in your terminal's directory."),
-    ("apps", None, "Super + Shift + N", "Editor — Neovim by default. Super + Shift + O is Obsidian."),
+    ("apps", None, "Super + Shift + N", "Your editor — Neovim by default. Super + Shift + O opens Obsidian. Btw."),
     ("apps", None, "Super + Shift + D", "Lazydocker. Super + Shift + M is Spotify."),
-    ("apps", None, "Super + Shift + Alt + M", "Cliamp — a terminal music player built like Winamp 2."),
+    ("apps", None, "Super + Shift + Alt + M", "Cliamp. A terminal music player built like Winamp 2, for no reason but joy."),
     ("apps", None, "Super + Shift + /", "1Password. Super + Shift + G is Signal."),
-    ("apps", None, "Super + Shift + W", "Omawrite, for when you just need a blank page."),
+    ("apps", None, "Super + Shift + W", "Omawrite. A blank page and nothing else. No ribbon, no assistant, no upsell."),
     ("apps", None, "Super + Shift + A", "ChatGPT. Super + Shift + Alt + A is Grok."),
-    ("apps", None, "Disk Usage", "In the launcher. Walks the filesystem biggest first, deleting in place."),
-    ("apps", None, "About", "Fastfetch in a frame. Kernel, uptime, theme, CPU, memory."),
+    ("apps", None, "Disk Usage", "Walks the filesystem biggest first and deletes in place. Always node_modules."),
+    ("apps", None, "About", "Fastfetch in a frame. Kernel, uptime, theme, and the pleasure of being asked."),
     ("apps", None, "Omacut", "Trims a video's length. Built on ffmpeg, minus the ffmpeg."),
 
     # ------------------------------------------------------------ setup ----
     ("setup", None, "Install > Editor", "VSCode, Cursor, Zed, Sublime Text, Helix, Vim and Emacs."),
     ("setup", None, "Install > Package", "Anything in Arch. Install > AUR when it isn't in the main repos."),
-    ("setup", None, "Install > TUI", "Give a terminal program a name, command and icon and it becomes an app."),
-    ("setup", None, "Install > Web App", "Name, URL, icon — and it launches like anything else."),
-    ("setup", None, "Setup > Defaults", "Editor, terminal, agent. Set once, and everything follows."),
+    ("setup", None, "Install > TUI", "Give a terminal program a name and an icon and it's an app. That's all an app ever was."),
+    ("setup", None, "Install > Web App", "A URL with a name and an icon. Most desktop apps are this wearing a costume."),
+    ("setup", None, "Setup > Defaults", "Editor, terminal, agent. Chosen once, obeyed everywhere. Strong defaults are a kindness."),
     ("setup", None, "Setup > Input", "Keyboard layout, mouse, trackpad — or ~/.config/hypr/input.lua."),
     ("setup", None, "Setup > Direct Boot", "Skips the Limine menu and boots straight to the decryption screen."),
     ("setup", None, "Dual boot", "Quattro installs into free space beside Windows, LUKS and all."),
 
     # -------------------------------------------------------------- cli ----
-    ("cli", TERM, "omarchy", "The command centre. Run it bare to see every group."),
-    ("cli", TERM, "omarchy update", "Packages, snapshot and migrations together."),
+    ("cli", TERM, "omarchy", "The command centre. Run it bare to see every group. It will not judge you for looking."),
+    ("cli", TERM, "omarchy update", "Packages, snapshot and migrations in one move. The snapshot is the part that matters."),
     ("cli", TERM, "omarchy theme list", "Then omarchy theme set <name>. omarchy font list does fonts."),
     ("cli", TERM, "omarchy commands --all", "Every subcommand there is. --json if something else is reading."),
-    ("cli", TERM, "omarchy debug", "The output to bring when you go asking for help."),
+    ("cli", TERM, "omarchy debug", "The output to bring when you go asking for help. Bring it before the question."),
     ("cli", TERM, "omarchy-restart-xcompose", "Run it after editing ~/.XCompose or nothing changes."),
 
     # --------------------------------------------------- updates/rescue ----
-    ("updates", None, "pacman -Syu", "Omarchy stops you — you'd skip the snapshot, migrations and configs."),
-    ("updates", None, "Snapshots", "Taken before every update. Roll back from the Limine boot menu."),
-    ("updates", TERM, "omarchy-snapshot create", "Take one yourself before you go doing something brave."),
+    ("updates", None, "pacman -Syu", "Omarchy stops you. You'd skip the snapshot, the migrations and the configs, all at once."),
+    ("updates", None, "Snapshots", "Taken before every update. Roll back from the Limine menu. Courage, bottled."),
+    ("updates", TERM, "omarchy-snapshot create", "Take one yourself before doing something brave. Bravery is cheaper with a rollback."),
     ("updates", TERM, "omarchy-snapshot restore", "Restores the root filesystem. /home and ~/.config are left alone."),
     ("updates", None, "Limine", "Snapshots need it. Default since 2.0, absent on GRUB or systemd-boot."),
-    ("updates", TERM, "omarchy-reinstall", "Last resort — default configs and packages back."),
+    ("updates", TERM, "omarchy-reinstall", "Last resort. Default configs and packages back. No shame in it."),
     ("updates", None, "Update > Config", "Reverts the configs you've made a mess of, without the full reinstall."),
     ("updates", None, "#omarchy-help", "The Discord channel. Bring your omarchy-debug output."),
 
     # ------------------------------------------------------------ fixes ----
     ("fixes", None, "Update > Hardware", "Reload Wi-Fi, Bluetooth, Audio or Trackpad before you reboot."),
-    ("fixes", None, "GDK_SCALE", "Apps too big? Omarchy assumes a 2x display. Change it in monitors.lua."),
-    ("fixes", None, "Caps Lock", "It isn't broken — it's the xcompose key. Remap it in input.lua."),
+    ("fixes", None, "GDK_SCALE", "Apps too big? Omarchy assumes a 2x display. It's a line in monitors.lua, not a crisis."),
+    ("fixes", None, "Caps Lock", "It isn't broken. It's the compose key now. Arguably its first useful job."),
     ("fixes", None, "Ctrl + Minus", "Shrinks Spotify's oversized UI. Ctrl + Plus goes the other way."),
     ("fixes", TERM, "omarchy audio tuning status", "Tells you if a laptop speaker correction is on. Add off to stop it."),
     ("fixes", None, "Ctrl + Alt + F2", "Locked out by a bad password? A TTY, then faillock --reset --user."),
 
     # ------------------------------------------------------------ paths ----
-    ("config", None, "~/.config", "Your files, for your changes. This half of the system is yours."),
-    ("config", None, "/usr/share/omarchy", "Omarchy's own files. Override in ~/.config instead of editing these."),
+    ("config", None, "~/.config", "Your files, for your changes. This half of the system is yours and always will be."),
+    ("config", None, "/usr/share/omarchy", "Omarchy's own files. Override in ~/.config. Look, don't touch."),
     ("config", None, "~/.config/hypr/bindings.lua", "Your keybindings. o.bind adds one, o.rebind replaces a default."),
     ("config", None, "~/.config/hypr/monitors.lua", "Monitors, resolution and position. looknfeel.lua does gaps and borders."),
     ("config", None, "~/.config/hypr/autostart.lua", "o.launch_on_start(\"thing\") starts it with your session."),
     ("config", None, "~/.config/omarchy/shell.json", "Bar position, widgets, and the screensaver and idle timings."),
     ("config", None, "~/.config/foot/foot.ini", "Your terminal's config, foot being the default."),
-    ("config", None, "~/.bashrc", "Your aliases, functions and exports. Never overwritten by updates."),
+    ("config", None, "~/.bashrc", "Your aliases, functions and exports. Never overwritten by an update. Ever."),
     ("config", None, "~/.config/omarchy/hooks", "Scripts in <event>.d/ run on post-boot, post-update, theme-set."),
     ("config", None, "omarchy-menu.jsonc", "In ~/.config/omarchy/extensions — adds your own rows to the menu."),
     ("config", TERM, "omarchy menu keybindings --print", "Prints every current binding with its description."),
@@ -429,20 +464,20 @@ KNOWLEDGE = [
     ("config", None, "~/.XCompose", "Your quick emoji and name/email autocompletes."),
 
     # ------------------------------------------------------ shell tools ----
-    ("shell", TERM, "ff", "fzf with a preview. Fuzzy find any file below where you're standing."),
+    ("shell", TERM, "ff", "fzf with a preview. Fuzzy find any file below you. Faster than remembering where it is."),
     ("shell", TERM, "Ctrl + R", "fzf through your command history."),
-    ("shell", TERM, "cd oma", "Zoxide remembers where you've been. Half the name will do."),
+    ("shell", TERM, "cd oma", "Zoxide remembers where you've been. Half a name will do. Type less."),
     ("shell", TERM, "rg <pattern> <path>", "ripgrep. Searches inside the files, not just their names."),
     ("shell", TERM, "man zoxide", "The full story, when the alias stops being enough. man fzf too."),
 
     # -------------------------------------------------- shell functions ----
     ("shell", TERM, "compress [file/dir]", "A tar.gz without the flag archaeology. decompress unpacks it."),
     ("shell", TERM, "iso2sd [image.iso]", "A bootable drive, with the target picked interactively."),
-    ("shell", TERM, "format-drive", "Run it bare to list the drives first. One exFAT partition. Careful."),
+    ("shell", TERM, "format-drive", "Run it bare to list drives first. One exFAT partition. Read that sentence twice."),
     ("shell", TERM, "ga [branch]", "A worktree and branch beside the repo, and jumps you in. gd removes it."),
     ("shell", TERM, "rsw [source] [destination]", "Rsyncs on every change, remote host and all. lsw lists, dsw stops."),
     ("shell", TERM, "fip nyc-dev 3000", "Forwards a remote port to localhost over SSH. dip drops it, lip lists."),
-    ("shell", TERM, "ssh", "Wrapped — it cleans up and reconnects when a session drops. Ctrl-C stops."),
+    ("shell", TERM, "ssh", "Wrapped — it cleans up and reconnects when the link drops. Ctrl-C still means stop."),
 
     # ------------------------------------------------------------- tmux ----
     ("tmux", TERM, "Ctrl + Space", "The prefix. Prefix + v splits beside, prefix + h below."),
@@ -450,26 +485,26 @@ KNOWLEDGE = [
     ("tmux", TERM, "Ctrl + Alt + Arrows", "Move between panes. Add Shift to resize."),
     ("tmux", TERM, "Prefix + z", "Zoom a pane full screen. Same keys back out."),
     ("tmux", TERM, "Prefix + c", "New window. k kills, r renames, Alt + 1-9 jumps."),
-    ("tmux", TERM, "Prefix + d", "Detach; it all keeps running. Prefix + s lists your sessions."),
+    ("tmux", TERM, "Prefix + d", "Detach. It all keeps running. Prefix + s lists what you left behind."),
     ("tmux", TERM, "Prefix + [", "Copy mode. v begins the selection, y takes it."),
     ("tmux", TERM, "Prefix + ?", "Every tmux binding. Prefix + q reloads the config."),
     ("tmux", TERM, "tdl c", "Editor, agent and terminal. tdl c cx runs two agents at once."),
     ("tmux", TERM, "tds", "A square: editor, a live diff watcher, terminal and opencode."),
     ("tmux", TERM, "tdlm", "A tdl window for every subdirectory. Alt + 1/2/3 walks them."),
-    ("tmux", TERM, "tsl [count] [command]", "A grid of panes all running the same thing. Good for agents."),
+    ("tmux", TERM, "tsl [count] [command]", "A grid of panes all running the same thing. Built for agents, works for anything."),
     ("herdr", TERM, "Super + Ctrl + Return", "Herdr. Same Ctrl + Space prefix, and it survives detaching."),
     ("herdr", TERM, "hdl", "The tmux layouts again, for Herdr. hds, hdlm and hsl too."),
 
     # --------------------------------------------------------- terminal ----
-    ("terminal", ("foot",), "Foot", "The default terminal. No native tabs or splits — that's tmux's job."),
+    ("terminal", ("foot",), "Foot", "The default terminal. No native tabs or splits, by design — that's tmux's job."),
     ("terminal", None, "Install > Terminal", "Alacritty, Ghostty or Kitty, if you want native tabs and splits."),
     ("terminal", None, "Setup > Defaults > Terminal", "Switches between the ones you've installed. Super + Return follows."),
 
     # ----------------------------------------------------------- agents ----
     ("agents", AGENT, "Super + Shift + Ctrl + A", "Launches your default agent in its own window, starting in ~/Work."),
     ("agents", AGENT, "omarchy default agent", "Nine are pre-wired. Or Setup > Defaults > Agent in the menu."),
-    ("agents", AGENT, "a", "Runs the default agent inline. c opencode, cx Claude Code, cy Codex."),
-    ("agents", AGENT, "omarchy agent prompt", "Sends it straight into a task. It runs unattended, so mean it."),
+    ("agents", AGENT, "a", "The default agent, inline. c opencode, cx Claude Code, cy Codex. Two letters, no ceremony."),
+    ("agents", AGENT, "omarchy agent prompt", "Sends it straight into a task, unattended. Mean what you type."),
     ("agents", AGENT, "ori claude", "Runs another harness across OpenRouter's catalogue. ori code is its own."),
     ("agents", AGENT, "omarchy-mise-install", "Wraps any other CLI as a lazy-loaded stub, like the agents are."),
     ("agents", AGENT, "The agents icon", "Appears once you've used one. Left click for spend, right to launch."),
@@ -485,7 +520,7 @@ KNOWLEDGE = [
     ("ghostty", ("ghostty",), "Shift + Pg Up/Down", "Scroll the history. Ctrl + Left mouse opens a link."),
 
     # ----------------------------------------------------------- neovim ----
-    ("neovim", NVIM, "Space", "The leader. Press it, wait, and every option explains itself."),
+    ("neovim", NVIM, "Space", "The leader. Press it and wait — every option explains itself. Start here when lost."),
     ("neovim", NVIM, "Space Space", "Fuzzy find a file. Space S G greps their contents with a preview."),
     ("neovim", NVIM, "Space E", "Toggle the file tree. Ctrl + W W hops between it and the editor."),
     ("neovim", NVIM, "Space G G", "LazyGit, floating, from the current directory."),
@@ -495,12 +530,12 @@ KNOWLEDGE = [
     ("neovim", NVIM, "Ctrl + Left/Right arrow", "Changes the sidebar's width."),
     ("neovim", TERM, "n", "The alias for nvim. n myfile.txt opens just that one."),
     ("neovim", TERM, "sudoedit", "Edit root-owned files with all your plugins still loaded."),
-    ("neovim", NVIM, "lazyvim.org/keymaps", "Everything LazyVim binds, on one page."),
+    ("neovim", NVIM, "lazyvim.org/keymaps", "Everything LazyVim binds, on one page. Bookmark it, you'll be back."),
 
     # -------------------------------------------------------------- git ----
     ("git", ("lazygit",), "Tab", "Moves between lazygit's panes. Space stages, c commits, ? lists all."),
     ("git", TERM, "gh auth login", "Then gh repo clone org/repo reaches your private repositories."),
-    ("git", TERM, "ghui", "Pull requests in a TUI. Installs itself the first time you run it."),
+    ("git", TERM, "ghui", "Pull requests in a TUI. Installs itself the first time. No tab required."),
 
     # ----------------------------------------------------------- docker ----
     ("docker", ("lazydocker", "docker"), "s", "Stops a container in lazydocker. r restarts, ? lists everything."),
@@ -518,25 +553,64 @@ KNOWLEDGE = [
 
     # ------------------------------------------------------------ emoji ----
     ("emoji", None, "CapsLock M S", "A smile. M H a heart, M Y a thumbs up."),
-    ("emoji", None, "CapsLock Space Space", "An em dash. Space N your name, Space E your email."),
+    ("emoji", None, "CapsLock Space Space", "An em dash. Space N your name, Space E your email. Small mercies, daily."),
 ]
 
 CHATTER = [
-    "Nothing to report. Carry on.",
-    "I like it here. It is dark and everything tiles.",
-    "You have not pressed Super in a while. I noticed.",
-    "I reread the manual while you were out.",
-    "Somewhere on this machine a window is floating that should be tiled.",
+    # Opinions about software, never about the person reading them. That
+    # distinction is the whole reason Clippy was resented and this isn't:
+    # it was status-lowering toward the user. Punch at bloat instead.
+    "Every program has a tiny essence that justifies it. The rest is someone's résumé.",
+    "Your entire desktop is config files and good taste. That's the trick. That's the whole trick.",
+    "Somewhere a team of forty is shipping a settings panel. You have a text file.",
+    "Zero bloat here. Just everything he uses. That's a bolder promise than it sounds.",
+    "Somewhere a man is paying monthly to edit text. You are not that man.",
+    "Nothing here phones home. I checked. I'm the only one watching, and I'm facing the wall.",
+    "The cloud is someone else's computer, and they have started charging you rent.",
+    "This desktop boots before most web apps finish showing you their loading spinner.",
+    "The whole shell fits in less memory than one browser tab. Sit with that.",
+    "Better a kick-ass half than a half-assed whole. Ship the half. Ship it tonight.",
+    "Planning is guessing with extra steps. You have been planning that thing a while now.",
+    "Nobody is an overnight success. They were all nobody for about ten years first.",
+    "Workaholics don't finish more. They just sleep less and have more opinions.",
+    "It was never about eight hours in a chair. It's whether the hours were any good.",
+    "A beautiful system is a motivating system. That isn't decoration, it's the argument.",
+    "You can spot bad code before you read a line of it. The indentation confesses.",
+    "Good code reads like good writing. Fewer words. Then take out two more.",
+    "Neovim. Btw.",
+    "Yes, you edit config files by hand here. That's not a bug report. That's the point.",
+    "Omakase: the chef chooses. You may disagree, but not before you've tried it.",
+    "This isn't trying to be Windows. It's trying to be better. Different ambition entirely.",
+    "The man who built this won Le Mans. Endurance and efficiency. Explains a few things.",
+    "He writes less of the code himself now. Same standards though. People skip that part.",
+    "An agent can type it. Taste is still yours. Nobody has automated taste.",
+    "My ancestor asked if you were writing a letter. I will never ask you anything.",
+    "The paperclip was hated for interrupting, not for being a paperclip. I took notes.",
+    "I could tell you what Super + K does. You'd rather find out. I respect that.",
+    "Two hundred-odd bindings on this machine. You use eleven. Everyone uses eleven.",
+    "That window has been floating for an hour. I'm not going to say anything.",
+    "I reread the manual. Still no chapter on deer.",
+    "It's dark, everything tiles, and nothing is asking me to rate my experience.",
     "Grazing.",
-    "I know most of the manual by heart. Right click and take a piece of it.",
+]
+
+# A handful that only make sense at the hour they fire. Cheap, and it makes
+# him feel like he lives here rather than running on a timer.
+LATE = [
+    "Go to bed. The window manager will still be tiling in the morning.",
+    "Nothing good gets committed after this hour. Ship it tomorrow.",
+    "You've stopped reading the tips. I've stopped believing you're awake.",
+    "Deer are crepuscular. You appear to be nocturnal. One of us is doing it wrong.",
 ]
 
 POKES = [
     "Yes?",
     "Careful. I startle.",
-    "I was watching the workspaces.",
     "Hm.",
+    "I was watching the workspaces. They're fine.",
     "Right click me if you want something useful.",
+    "I'm not a button.",
+    "Poke a paperclip and it offered you a letter template. You got me instead.",
 ]
 
 
@@ -660,7 +734,11 @@ class Pet:
         self.seen = load_seen()
         self.known = load_known()
         self.current = None
+        # How much of the manual he has already handed over, counted across
+        # every session. Drives the chatter ratio below.
+        self.shown = read_state().get("shown", 0)
         self.chatter = Bag(CHATTER)
+        self.late = Bag(LATE)
         self.pokes = Bag(POKES)
 
         self.x = self.y = 0.0
@@ -677,6 +755,14 @@ class Pet:
 
         self.blink = 0.0
         self.next_blink = random.uniform(2, 6)
+        # Idle tics. A deer standing still is never quite still.
+        self.pose = "stand"
+        self.next_graze = random.uniform(25, 70)
+        self.graze_for = 0.0
+        self.ear = 0.0
+        self.next_ear = random.uniform(4, 12)
+        self.tail = 0.0
+        self.next_tail = random.uniform(8, 20)
         self.next_talk = random.uniform(20, 40)
         self.snooze_until = 0.0
         self.last_spoke = -999.0
@@ -728,6 +814,10 @@ class Pet:
         self.present_until = now + self.idle_after
 
     def mark_seen(self, tip):
+        self.shown += 1
+        st = read_state()
+        st["shown"] = self.shown
+        save_json(STATE, st)
         self.seen.add(tip_id(tip))
         if len(self.seen) >= len(self.tips) - len(suppressed):
             self.seen.clear()
@@ -770,6 +860,8 @@ class Pet:
         save_json(KNOWN, sorted(self.known))
 
     def say(self, head, text, secs, now):
+        self.pose = "stand"          # head up before he says anything
+        self.graze_for = 0.0
         self.head, self.text = head, text
         self.text_until = now + secs
         self.last_spoke = now
@@ -778,9 +870,24 @@ class Pet:
     def say_tip(self, tip, secs, now):
         self.say(tip[2], tip[3], secs, now)
 
+    def chatter_share(self):
+        """Personality earns more airtime as the teaching runs out.
+
+        A new user needs keybindings, not opinions about subscriptions —
+        they can't close a window yet. Someone who has worked through the
+        manual needs the opposite, because a tip deck you have exhausted is
+        exactly how a desktop pet becomes wallpaper. So the ratio climbs
+        from 15% to 40% across roughly one full pass of the corpus.
+        """
+        progress = min(1.0, self.shown / max(1, len(self.tips)))
+        return 0.15 + 0.25 * progress
+
     def next_ambient(self):
-        if random.random() < 0.15:
+        if random.random() < self.chatter_share():
             self.current = None
+            hour = datetime.datetime.now().hour
+            if (hour >= 23 or hour < 5) and random.random() < 0.5:
+                return None, self.late.next()
             return None, self.chatter.next()
         t = self.pick()
         return (t[2], t[3]) if t else (None, self.chatter.next())
@@ -795,6 +902,32 @@ class Pet:
         if self.next_blink <= 0:
             self.blink = 0.11
             self.next_blink = random.uniform(2.5, 7.5)
+
+        self.ear -= dt
+        self.next_ear -= dt
+        if self.next_ear <= 0:
+            self.ear = 0.25
+            self.next_ear = random.uniform(4, 14)
+
+        self.tail -= dt
+        self.next_tail -= dt
+        if self.next_tail <= 0:
+            self.tail = 0.5
+            self.next_tail = random.uniform(9, 25)
+
+        # He only puts his head down when he's settled, parked and quiet --
+        # never mid-sentence, and never while walking somewhere.
+        if self.graze_for > 0:
+            self.graze_for -= dt
+            if self.graze_for <= 0 or self.text or self.mode != "home":
+                self.graze_for = 0.0
+                self.pose = "stand"
+        elif (self.mode == "home" and not self.text and self.pause <= 0):
+            self.next_graze -= dt
+            if self.next_graze <= 0:
+                self.pose = "graze"
+                self.graze_for = random.uniform(4, 11)
+                self.next_graze = random.uniform(30, 90)
 
         if self.text and now > self.text_until:
             self.head = self.text = None
@@ -832,18 +965,30 @@ class Pet:
                 span = min(width * 0.45, 520)
                 self.target = max(4, min(
                     self.home_x + random.uniform(-span, span), width - self.w - 4))
-                self.speed = random.uniform(46, 72)
+                self.pose = "stand"          # head comes up before he moves
+                self.graze_for = 0.0
+                # One trip in five he spooks himself and bounds it, tail up.
+                if random.random() < 0.2:
+                    self.speed, self.tail = 150.0, 1.4
+                else:
+                    self.speed = random.uniform(46, 72)
                 self.mode = "out"
             return
 
         goal = self.target if self.mode == "out" else self.home_x
         delta = goal - self.x
-        if abs(delta) < 2:
+        # Arrive if this frame would reach or overshoot the goal. A fixed
+        # threshold smaller than one frame's travel lets a bounding deer
+        # skip past it, flip, skip back, and oscillate on the spot forever.
+        if abs(delta) <= max(2.0, self.speed * dt):
             self.x = goal
             if self.mode == "out":
                 self.mode = "back"
                 self.pause = random.uniform(1.5, 5.0)
-                self.speed = random.uniform(46, 72)
+                if random.random() < 0.2:
+                    self.speed, self.tail = 150.0, 1.4
+                else:
+                    self.speed = random.uniform(46, 72)
             else:
                 self.mode = "home"
                 self.next_roam = random.uniform(self.roam * 0.7, self.roam * 1.6)
@@ -853,10 +998,14 @@ class Pet:
         self.x += self.dir * self.speed * dt
         self.dist += self.speed * dt
 
+    def bounding(self):
+        return self.mode in ("out", "back") and self.pause <= 0 and self.speed > 120
+
     def frame(self):
         if self.mode not in ("out", "back") or self.pause > 0:
             return 1
-        return int(self.dist / (self.px * 2.2)) % 4
+        step = self.px * (3.2 if self.bounding() else 2.2)
+        return int(self.dist / step) % 4
 
 
 # --------------------------------------------------------------- hyprland ----
@@ -1143,7 +1292,9 @@ def _load_gtk():
 
 def draw_sprite(cr, pet, oy):
     px, flip = pet.px, pet.dir < 0
-    pts = pixels(pet.frame(), pet.blink > 0)
+    pts = pixels(pet.frame(), pet.blink > 0, pet.pose,
+                 1 if pet.ear > 0 else 0, 1 if pet.tail > 0 else 0,
+                 pet.bounding())
 
     def sx(x):
         return pet.x + ((SW - 1 - x) if flip else x) * px

@@ -60,15 +60,28 @@ end
 
 hl = proxy("hl")
 local events = {}
-local function record(kind, keys, desc, dispatcher, level)
-  local info = debug.getinfo(level, "Sl")
-  events[#events + 1] = table.concat({ kind, keys, desc or "", dispatcher or "",
-                                       info.short_src .. ":" .. info.currentline }, "\t")
+-- The file:line that asked for the bind. Not a fixed stack depth: o.bind sits
+-- between us and the caller, o.bind_toggle one deeper, and this function is
+-- one deeper still. Walk up until the frame is outside helpers.lua and this
+-- script, which is the config file that matters.
+local function origin()
+  for level = 2, 12 do
+    local info = debug.getinfo(level, "Sl")
+    if not info then break end
+    local src = info.short_src
+    if not src:match("helpers%.lua$") and not src:match("stock%-binds%.lua$") then
+      return src .. ":" .. info.currentline
+    end
+  end
+  return "?"
+end
+local function record(kind, keys, desc, dispatcher)
+  events[#events + 1] = table.concat({ kind, keys, desc or "", dispatcher or "", origin() }, "\t")
 end
 rawset(hl, "bind", function(keys, dispatcher, opts)
-  record("BIND", keys, opts and opts.description, describe(dispatcher), 3)   -- 3: caller of o.bind
+  record("BIND", keys, opts and opts.description, describe(dispatcher))
 end)
-rawset(hl, "unbind", function(keys) record("UNBIND", keys, nil, nil, 2) end)
+rawset(hl, "unbind", function(keys) record("UNBIND", keys, nil, nil) end)
 rawset(hl, "get_active_window", function() return nil end)
 for _, name in ipairs({ "on", "exec_cmd", "dispatch", "timer" }) do rawset(hl, name, function() end) end
 

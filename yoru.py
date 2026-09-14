@@ -30,7 +30,10 @@ Run
 
 Your own tips
     ~/.config/yoru/tips.txt — one per line, "Super + Y | what it does".
-    Lines with no pipe become idle remarks.
+    Lines with no pipe become idle remarks. Every o.bind in your
+    ~/.config/hypr/bindings.lua with a description becomes a tip as well,
+    in your words, unless a stock tip already covers the key (--no-own to
+    stop that).
 """
 
 import argparse
@@ -51,6 +54,8 @@ STATE = os.path.join(CONFIG, "state.json")
 SEEN = os.path.join(CONFIG, "seen.json")
 KNOWN = os.path.join(CONFIG, "known.json")
 USER_TIPS = os.path.join(CONFIG, "tips.txt")
+OWN_BINDS = os.path.expanduser("~/.config/hypr/bindings.lua")
+OWN_CAP = 25
 
 # --debug. Every decision he makes goes to stderr with a timestamp, so a
 # stranger's "he said the wrong thing" arrives with the why attached. The
@@ -372,6 +377,7 @@ KNOWLEDGE = [
     ("workspaces", None, "Super + Shift + Alt + 1/2/3/4", "Move a window to a workspace without following it."),
     ("workspaces", None, "Super + Tab", "Next workspace. Shift for previous, Ctrl for the former one."),
     ("workspaces", None, "Super + S", "The scratchpad. Super + Alt + S throws a window in. Where things go to be forgotten."),
+    ("workspaces", None, "Super + Alt + S", "Sends the window to the scratchpad without following it. Super + S brings it back into view."),
     ("workspaces", None, "Super + Scroll Wheel", "Scroll through workspaces. The one concession to the mouse in this whole place."),
     ("workspaces", None, "Super + Shift + Alt + Arrows", "Move workspaces to the monitor in that direction."),
 
@@ -414,7 +420,7 @@ KNOWLEDGE = [
 
     # ---------------------------------------------------------- toggles ----
     ("toggles", None, "Super + Ctrl + N", "Nightlight. It is later than you think."),
-    ("toggles", None, "Super + Ctrl + I", "Stop the screen locking on idle. For demos, not for cafés."),
+    ("toggles", None, "Super + Ctrl + I", "Stay awake: no idle lock, no screensaver, and no confirmation. Press it again to idle."),
     ("toggles", None, "Super + Ctrl + Delete", "Laptop display on and off. Add Alt to mirror it."),
     ("toggles", None, "Shift + Mute", "Next audio output. Shift + Play switches media source."),
     ("toggles", None, "Alt + Play", "Next track. Alt + Shift + Play goes back."),
@@ -655,6 +661,108 @@ def load_user_tips():
             KNOWLEDGE.append(("yours", None, keys.strip(), text.strip()))
         else:
             CHATTER.append(line)
+
+
+# ---------------------------------------------------------- own binds ----
+# ~/.config/hypr/bindings.lua is, by Omarchy's own convention, the user's file:
+# the shipped defaults live under /usr/share and the template says to add or
+# replace bindings here. So every o.bind in it with a description is a tip
+# the user wrote themselves, and it needs no comparison against stock.
+_OWN_CALL = re.compile(
+    r'o\.bind(?:_toggle)?\(\s*"([^"\n]+)"\s*,\s*"([^"\n]*)"', re.S)
+
+
+def _own_key(keys):
+    """(mods, KEY) the way the verifier normalises, or None if it isn't a
+    plain key string. Built keys like 'SUPER + ' .. key never match the
+    regex, so they are already gone by here."""
+    parts = [p.strip() for p in keys.split("+")]
+    mods = frozenset(p.upper() for p in parts if p.upper() in MODBITS)
+    rest = [p for p in parts if p.upper() not in MODBITS]
+    if len(rest) != 1 or not rest[0]:
+        return None
+    key = rest[0]
+    if key.startswith("code:"):
+        key = KEYCODES.get(key[5:], key)
+    elif not key.startswith(("XF86", "mouse", "switch")):
+        key = key.upper()
+    return mods, key
+
+
+def _own_label(keys):
+    """'SUPER + SHIFT + K' -> 'Super + Shift + K', the corpus's spelling."""
+    out = []
+    for p in (p.strip() for p in keys.split("+")):
+        if p.upper() in MODBITS:
+            out.append(p.capitalize())
+        elif p.startswith("code:"):
+            out.append(KEYCODES.get(p[5:], p))
+        elif p.isupper() and len(p) > 1:
+            out.append(p.capitalize())
+        else:
+            out.append(p)
+    return " + ".join(out)
+
+
+def own_bind_tips(path=OWN_BINDS, knowledge=None):
+    """(tips, replaced) for the user's own bindings, in file order.
+
+    A key in this file is one the user bound, so their description is the
+    truth about it. When a curated tip has that key as its *headline*, the
+    curated tip is the one that is wrong now: it goes in `replaced`, keyed
+    by tip id, and the user's tip takes its place. A curated tip that only
+    mentions the key in passing is left alone — too likely to lose something
+    useful over a reference. Capped at OWN_CAP. Any failure to read or
+    parse means no tips and no replacements."""
+    knowledge = KNOWLEDGE if knowledge is None else knowledge
+    try:
+        with open(path) as fh:
+            src = "".join(l for l in fh if not l.lstrip().startswith("--"))
+    except (OSError, UnicodeDecodeError):
+        return [], {}
+    headline = {}                   # normalised key -> curated tip
+    for t in knowledge:
+        parsed = parse_keys(t[2])
+        if parsed:
+            for k in parsed[1]:
+                headline.setdefault((parsed[0], k), t)
+    taken = {tip_id(t) for t in knowledge}
+    tips, replaced = {}, {}
+    for keys, desc in _OWN_CALL.findall(src):
+        desc = desc.strip()
+        norm = _own_key(keys)
+        if not desc or norm is None:
+            continue
+        tip = ("yours", None, _own_label(keys), desc)
+        if tip_id(tip) in taken:
+            continue
+        tips[norm] = tip            # a later bind of the same key wins
+        if norm in headline:
+            replaced[tip_id(headline[norm])] = tip
+    tips = list(tips.values())[:OWN_CAP]
+    kept = {tip_id(t) for t in tips}
+    replaced = {k: v for k, v in replaced.items() if tip_id(v) in kept}
+    return tips, replaced
+
+
+# Curated tips whose headline key the user rebound in bindings.lua. Folded
+# into `suppressed` on every refresh, so they stay out however the live
+# verifier's own set changes.
+rebound = {}                    # curated tip id -> reason
+
+
+def load_own_binds():
+    tips, replaced = own_bind_tips()
+    by_id = {tip_id(t): t for t in KNOWLEDGE}
+    for old_id, new in replaced.items():
+        old = by_id[old_id]
+        rebound[old_id] = "%s: rebound in bindings.lua, now %r" % (old[2], new[3])
+        debug("own binds: replaced %s (%r) with %r — key is rebound in %s",
+              old_id, old[3], new[3], OWN_BINDS)
+    KNOWLEDGE.extend(tips)
+    suppressed.update(rebound)
+    debug("own binds: %d tips from %s, %d curated replaced",
+          len(tips), OWN_BINDS, len(replaced))
 
 
 def load_seen():
@@ -1261,9 +1369,11 @@ def refresh_suppressed(tips):
             debug("suppression: hyprctl binds unavailable, keeping %d withheld",
                   len(suppressed))
         refresh_suppressed.blind = True
-        return                      # can't see the compositor: change nothing
+        suppressed.update(rebound)  # can't see the compositor: change nothing
+        return                      # else; a rebind needs no compositor
     refresh_suppressed.blind = False
     fresh = verify_tips(tips, binds)
+    fresh.update(rebound)
     if DEBUG and fresh != suppressed:
         debug("suppression: %d of %d tips withheld against %d live binds",
               len(fresh), len(tips), len(binds))
@@ -1285,6 +1395,7 @@ def cmd_verify_report(tips):
         return 0
     scoped = [t for t in tips if t[0] in HYPR_TOPICS and parse_keys(t[2])]
     gone = verify_tips(tips, binds)
+    gone.update(rebound)
     for t in tips:
         if tip_id(t) in gone:
             print("  %-13s %s" % (t[0], gone[tip_id(t)]))
@@ -1314,6 +1425,8 @@ def main(argv=None):
                    help="keep the built-in palette instead of following the theme")
     p.add_argument("--no-context", action="store_true",
                    help="ignore the focused window entirely")
+    p.add_argument("--no-own", action="store_true",
+                   help="don't make tips from your own ~/.config/hypr/bindings.lua")
     p.add_argument("--quiet", action="store_true",
                    help="no ambient tips; only when asked or on context")
     p.add_argument("--start-hidden", action="store_true",
@@ -1334,6 +1447,8 @@ def main(argv=None):
     DEBUG = opts.debug
 
     load_user_tips()
+    if not opts.no_own:
+        load_own_binds()
     topics = {t.strip() for t in opts.topics.split(",") if t.strip()}
 
     if opts.forget_known:

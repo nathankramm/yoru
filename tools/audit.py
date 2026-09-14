@@ -1,6 +1,7 @@
 import collections, datetime, glob, importlib.util, os, random, shutil
 import tempfile, types, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REAL_HOME = os.environ.get("HOME", "")      # for the one check that reads a real user file
 os.environ["HOME"] = tempfile.mkdtemp()
 sp = importlib.util.spec_from_file_location("y", os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "yoru.py"))
@@ -160,4 +161,30 @@ oob = [(pose, b, f) for pose in ("stand", "graze") for b in (False, True)
            or min(z[1] for z in q) < -4 or max(z[1] for z in q) > 25)(
            m.pixels(f, False, pose, e, tl, b))]
 ck("26 all pose combos in bounds", not oob, oob[:2])
+# Tips generated from the user's own bindings.lua replace the curated tip for
+# a key the user rebound and add the rest. Afterwards no key may be covered
+# twice and every id must be unique. Run against the real file when there is
+# one, then against an empty one.
+own_path = os.path.join(REAL_HOME, ".config/hypr/bindings.lua")
+before = list(m.KNOWLEDGE)
+own, replaced = m.own_bind_tips(own_path) if os.path.exists(own_path) else ([], {})
+active = [t for t in m.KNOWLEDGE if m.tip_id(t) not in replaced] + own
+# The curated set deliberately covers a few keys twice for different windows
+# (Super + T for btop, Space for nautilus); what must not happen is an own tip
+# sharing a key with any curated tip that is still active, or with another
+# own tip.
+curated_keys = {(p[0], k) for t in active if t[0] != "yours"
+                for p in [m.parse_keys(t[2])] if p for k in p[1]}
+own_keys = [m._own_key(t[2]) for t in own]
+twice = [m._own_label(t[2]) for t in own if m._own_key(t[2]) in curated_keys] + \
+        [k for k, c in collections.Counter(own_keys).items() if c > 1]
+ids = [m.tip_id(t) for t in active]
+empty_dir = tempfile.mkdtemp(); empty_lua = os.path.join(empty_dir, "bindings.lua")
+open(empty_lua, "w").write('-- nothing here\nhl.unbind("SUPER + SHIFT + B")\n')
+empty, empty_replaced = m.own_bind_tips(empty_lua)
+ck("29 own-bind tips replace, never duplicate", not twice and len(ids) == len(set(ids))
+   and own == own[:m.OWN_CAP] and not empty and not empty_replaced and m.KNOWLEDGE == before
+   and all(r in {m.tip_id(t) for t in m.KNOWLEDGE} for r in replaced),
+   "%d own, %d curated replaced (%s); keys covered twice %s; empty file -> %d" % (
+       len(own), len(replaced), ", ".join(sorted(replaced)) or "none", twice, len(empty)))
 print("\n%d/%d  FAILURES: %s" % (N - len(F), N, F or "none"))

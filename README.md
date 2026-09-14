@@ -3,7 +3,7 @@
 > *It looks like you're using a tiling window manager. Would you like help with that?*
 
 A pixel deer lives in the corner of your screen and quietly teaches you
-Omarchy. He knows 188 things about it, notices which app you're in,
+Omarchy. He knows 189 things about it, notices which app you're in,
 follows your theme, and — unlike his spiritual ancestor — shuts up when you
 tell him to.
 
@@ -65,10 +65,11 @@ or a search engine. The manual's hotkeys table lists `Super + Q` to close a
 window; it isn't bound. See [`tools/`](tools/README.md) for how the tips are
 verified and how to redo it when a new version lands.
 
-He does **not** yet know *your* Omarchy. He checks that a binding still exists
-before teaching it (see [Your bindings](#your-bindings)), but he'll still teach
-you a default you've rebound to mean something else, or mention Ghostty when
-you're on Foot. See [Roadmap](#roadmap).
+He knows a little of *your* Omarchy. He checks that a binding still exists
+before teaching it, and reads your own `bindings.lua` so a key you rebound is
+taught in your words rather than the stock ones (see
+[Your bindings](#your-bindings)). He'll still mention Ghostty when you're on
+Foot. See [Roadmap](#roadmap).
 
 ---
 
@@ -111,7 +112,7 @@ o.launch_on_start("python3 /home/nathan/.local/bin/yoru")
 From the terminal, no GUI involved:
 
 ```bash
-yoru --ask screenshot     # search all 188 tips
+yoru --ask screenshot     # search all 189 tips
 yoru --list               # everything, grouped by topic
 yoru --forget-known       # un-retire everything
 ```
@@ -130,6 +131,7 @@ yoru --forget-known       # un-retire everything
 | `--quiet` | | contextual tips only |
 | `--no-context` | | ignore the focused window |
 | `--no-theme` | | keep the built-in palette |
+| `--no-own` | | don't turn your own `~/.config/hypr/bindings.lua` binds into tips |
 | `--start-hidden` | | begin off screen |
 | `--verify-report` | | list the tips this machine's bindings rule out, and exit |
 | `--debug` | | log every decision to stderr with a timestamp — attach it to a bug report |
@@ -189,6 +191,13 @@ as are your own tips. So are the Chromium extension bindings (`Alt + Shift + L`,
 browser tips rather than compositor ones and aren't checked against it. If
 `hyprctl` is missing or its output can't be read, nothing is withheld.
 
+Your own `~/.config/hypr/bindings.lua` is read too. Every `o.bind` in it with
+a description becomes a tip in your words (topic `yours`, at most 25, never
+checked against the compositor — it came from the config). A key in that file
+is one you rebound, so if a curated tip has it as its headline, your tip
+replaces it: `Super + S` stops being "the scratchpad" and becomes whatever you
+called it. `--no-own` turns this off.
+
 `yoru --verify-report` prints exactly what he's holding back and why.
 `--list` and `--ask` still show everything — suppression only applies to what
 he volunteers.
@@ -228,17 +237,18 @@ A line with no `|` becomes idle chatter.
 
 The next versions are about making him yours rather than generic.
 
-- **Catch rebinds, not just unbinds.** Checking that a key exists can't tell
-  that `Super + S` still exists but now opens your scratch notes instead of the
-  scratchpad. That needs the live description compared against Omarchy's stock
-  one for the same key, which means reading the defaults under
-  `/usr/share/omarchy/default/hypr/bindings/`.
+- ~~**Catch rebinds, not just unbinds.**~~ Done, and not the way this bullet
+  expected. Checking that a key exists couldn't tell that `Super + S` still
+  existed but now opened your scratch notes. The fix needed no stock
+  description table: a key in your own `~/.config/hypr/bindings.lua` is one
+  you rebound, so your description replaces the curated tip. See
+  [Your bindings](#your-bindings).
 - **Drop what you haven't installed.** A `pacman -Qq` check at startup should
   retire whole topics — no Ghostty tips on a Foot machine.
 - **Weight by what you actually use.** He already watches window focus; over
   weeks that's a real usage model, not uniform random.
-- **Generate tips from your own configs** — aliases in `~/.bashrc`, your
-  scratchpad scripts, your own `bindings.lua`.
+- **Generate tips from your own configs** — `bindings.lua` is done (above);
+  aliases in `~/.bashrc` and your scratchpad scripts are not.
 - **Frequency decay**, so he tapers as you learn instead of running at a fixed
   interval forever.
 

@@ -1,10 +1,12 @@
 #!/bin/bash
-# Reverse install.sh: the binary and the autostart line go; ~/.config/yoru
-# (his position, what he has said, what you retired) is asked about first.
+# Reverse install.sh: the binary, the autostart line and the hide/show binding
+# go; ~/.config/yoru (his position, what he has said, what you retired) is
+# asked about first.
 set -euo pipefail
 
 bin="$HOME/.local/bin/yoru"
 autostart="$HOME/.config/hypr/autostart.lua"
+bindings="$HOME/.config/hypr/bindings.lua"
 state="$HOME/.config/yoru"
 did=()
 
@@ -29,6 +31,18 @@ if [[ -f $autostart ]] && grep -Eq '\.local/bin/yoru' "$autostart"; then
   did+=("removed the yoru line from $autostart (backup: $backup)")
 else
   did+=("no yoru line in $autostart")
+fi
+
+if [[ -f $bindings ]] && grep -Eq '^[^-]*bind\(.*USR1.*bin/yoru' "$bindings"; then
+  backup="$bindings.bak-$(date +%Y%m%d-%H%M%S)"
+  cp -- "$bindings" "$backup"
+  # Drop the toggle bind and the comment install.sh put above it, nothing else.
+  grep -Ev '^[^-]*bind\(.*USR1.*bin/yoru|^-- Yoru, the Omarchy assistant: hide and show him \(added by install\.sh\)$' \
+    "$bindings" >"$bindings.tmp"
+  mv -- "$bindings.tmp" "$bindings"
+  did+=("removed the toggle binding from $bindings (backup: $backup)")
+else
+  did+=("no toggle binding in $bindings")
 fi
 
 printf '%s\n' "${did[@]}"

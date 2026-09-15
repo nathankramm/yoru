@@ -2,10 +2,13 @@
 """
 yoru — a Clippy for Omarchy, minus the reasons everyone hated Clippy.
 
-A pixel deer parks in a corner of your screen and tells you things from the
-Omarchy 4 (Quattro) manual. He knows the desktop, the CLI, the coding agents,
-the shell tools, tmux, Herdr, Foot, Neovim, lazygit, lazydocker, btop, the file
-manager, browsers and updates — and he notices which of those you are in.
+A pixel deer parks in a corner of your screen and tells you things about
+Omarchy 4 (Quattro). Every tip was checked against the installed release
+under /usr/share/omarchy, not the manual — which lists Super + Q to close a
+window, and it isn't bound. He knows the desktop, the CLI, the coding
+agents, the shell tools, tmux, Herdr, Foot, Neovim, lazygit, lazydocker,
+btop, the file manager, browsers and updates — and he notices which of
+those you are in.
 
 Where he sits
     Bottom right by default, 24px off each edge. Drag him anywhere with the
@@ -17,7 +20,7 @@ Where he sits
 What he does
     Ambient  — a tip every few minutes, never twice until he's run out.
     Contextual — when you focus a new app he offers something for that app,
-                 at most twice per app per session, never inside the cooldown.
+                 at most twice per app per day, never inside the cooldown.
     On demand  — right click for the next tip, middle click to snooze an hour.
 
 Deps (Arch / Omarchy)
@@ -347,7 +350,10 @@ WEB = ("chromium", "chrome", "brave", "firefox", "zen")
 # Quattro gives a launched agent its own window class.
 AGENT = TERM + ("org.omarchy.agent", "opencode", "claude", "codex", "crush")
 
-# Every entry below was checked against the Omarchy 4 (Quattro) manual.
+# Every entry below was checked against the installed Omarchy 4 (Quattro)
+# release — the scripts, Lua and menu under /usr/share/omarchy — not the
+# manual, which lists bindings the release doesn't have (Super + Q).
+# tools/README.md says where to look, per topic.
 KNOWLEDGE = [
     # ---------------------------------------------------------- windows ----
     ("windows", None, "Super + K", "Every keybinding at once. Alt + K for tmux, Ctrl + K for Herdr. Nobody memorises all of them."),

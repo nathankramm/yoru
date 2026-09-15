@@ -9,19 +9,7 @@ tell him to.
 
 ![Yoru grazing, speaking and bounding](docs/yoru-motion.gif)
 
-<sub>Sixteen seconds. Smaller and sharper as [MP4](docs/yoru-motion.mp4).</sub>
-
----
-
-## Key Details
-
-| | |
-|---|---|
-| **Official Name** | Yoru (夜 — "night", after the Tokyo Night palette he was drawn in) |
-| **Program/Feature Name** | The Omarchy Assistant |
-| **Software** | Omarchy 4 "Quattro" · Hyprland · Wayland |
-| **Nickname** | The deer |
-| **Predecessor** | Clippit, the Microsoft Office Assistant (1997–2007), may he rest |
+<sub>Twenty seconds. Smaller and sharper as [MP4](docs/yoru-motion.mp4).</sub>
 
 ---
 
@@ -56,6 +44,30 @@ The one thing the research said to keep: humour. Agents that joked were rated
 
 ---
 
+## What he says
+
+Six of the 189, as `yoru --list` prints them:
+
+```
+== windows
+  Super + K                          Every keybinding at once. Alt + K for tmux, Ctrl + K for Herdr. Nobody memorises all of them.
+  Super + W                          Close the window. No confirmation dialog. There was never going to be one.
+  Super + Backspace                  Toggle transparency. Looks incredible, reads terribly. Use sparingly.
+
+== updates
+  pacman -Syu                        Omarchy stops you. You'd skip the snapshot, the migrations and the configs, all at once.
+
+== shell
+  ff                                 fzf with a preview. Fuzzy find any file below you. Faster than remembering where it is.
+  compress [file/dir]                A tar.gz without the flag archaeology. decompress unpacks it.
+```
+
+And now and then, between tips, nothing to do with keybindings:
+
+> Nothing here phones home. I checked. I'm the only one watching, and I'm facing the wall.
+
+---
+
 ## Scope
 
 **This is the base build.** Yoru knows stock Omarchy 4 (Quattro) — the desktop,
@@ -68,10 +80,11 @@ window; it isn't bound. See [`tools/`](tools/README.md) for how the tips are
 verified and how to redo it when a new version lands.
 
 He knows a little of *your* Omarchy. He checks that a binding still exists
-before teaching it, and reads your own `bindings.lua` so a key you rebound is
-taught in your words rather than the stock ones (see
-[Your bindings](#your-bindings)). He'll still mention Ghostty when you're on
-Foot. See [Roadmap](#roadmap).
+before teaching it, reads your own `bindings.lua` so a key you rebound is
+taught in your words rather than the stock ones, and asks `pacman` what's
+installed, so there are no Ghostty tips on a Foot machine (see
+[Your bindings](#your-bindings)). What he doesn't do yet is in the
+[Roadmap](#roadmap).
 
 ---
 
@@ -84,10 +97,12 @@ cd yoru
 ```
 
 No sudo. It checks the four dependencies and prints the `pacman` line if any
-are missing, puts `yoru.py` at `~/.local/bin/yoru`, and adds one
-`o.launch_on_start` line to `~/.config/hypr/autostart.lua` (backing it up
+are missing, puts `yoru.py` at `~/.local/bin/yoru`, adds one
+`o.launch_on_start` line to `~/.config/hypr/autostart.lua` and one `o.bind`
+line for `Super + Ctrl + Y` to `~/.config/hypr/bindings.lua` (backing each up
 first, and only if no yoru line is there already — running it twice is safe).
-Autostart takes effect at your next login; until then, `yoru &`.
+Autostart takes effect at your next login; until then, `yoru &`. The binding
+is live after `hyprctl reload`.
 
 Try the knobs before committing to them:
 
@@ -104,9 +119,9 @@ git pull && ./install.sh
 
 `yoru --version` says what you have; put it in a bug report.
 
-`./uninstall.sh` reverses it — stops him, removes the binary and the
-autostart line — and asks before touching `~/.config/yoru`, which is yours:
-his position, what he has said, what you retired.
+`./uninstall.sh` reverses it — stops him, removes the binary, the autostart
+line and the binding — and asks before touching `~/.config/yoru`, which is
+yours: his position, what he has said, what you retired.
 
 <details>
 <summary>By hand, if you'd rather see each step</summary>
@@ -123,6 +138,15 @@ spelled out (the launcher runs before your shell has expanded anything):
 o.launch_on_start("/home/you/.local/bin/yoru")
 ```
 
+And one in `~/.config/hypr/bindings.lua`, so `Super + Ctrl + Y` can hide and
+show him. The pattern is the full path with a boundary after it, because
+`SIGUSR1` kills any process that has no handler for it — a looser pattern
+could reach an editor that happens to have the file open:
+
+```lua
+o.bind("SUPER + CTRL + Y", "Toggle Yoru", "pkill -USR1 -f 'python3 /home/you/.local/bin/yoru( |$)'")
+```
+
 </details>
 
 ---
@@ -137,6 +161,10 @@ o.launch_on_start("/home/you/.local/bin/yoru")
 | **Middle click** | Snooze one hour. Again to wake him |
 | **Drag** | Move him. The spot is remembered across reboots |
 | **Super + Ctrl + Y** | Hide him entirely. Again to bring him back |
+
+That last one is a Hyprland binding `install.sh` puts in your `bindings.lua`.
+It sends `SIGUSR1` and the process keeps running, so his position, snooze
+state and which tips he's seen all survive.
 
 From the terminal, no GUI involved:
 
@@ -155,6 +183,7 @@ yoru --forget-known       # un-retire everything
 | `--idle` | 300 | seconds before he assumes you've left (`0` = always on) |
 | `--cooldown` | 90 | minimum quiet before a contextual tip |
 | `--corner` | `br` | `br`, `bl`, `tr`, `tl` — where he parks on first run |
+| `--margin` | 24 | pixels from the screen edge on first run |
 | `--scale` | 4 | pixel size |
 | `--topics` | | e.g. `nvim,tmux` — limit him |
 | `--quiet` | | contextual tips only |
@@ -166,12 +195,10 @@ yoru --forget-known       # un-retire everything
 | `--start-hidden` | | begin off screen |
 | `--still` | | never walk, bound or graze — for anyone who finds movement at the edge of vision distracting; he still blinks and talks |
 | `--version` | | print the version and exit |
-| `--monitor` | focused | connector to live on, e.g. `DP-1`; if it isn't connected he warns and uses the focused output, so it's safe in `autostart.lua` |
+| `--monitor` | focused | connector to live on, e.g. `DP-1`; if it isn't connected he warns and takes the focused one |
+| `--layer` | `overlay` | `overlay` stays above full-screen windows; `top` goes under them; `bottom` and `background` sit behind everything |
 | `--verify-report` | | list the tips this machine's bindings rule out, and exit |
 | `--debug` | | log every decision to stderr with a timestamp — attach it to a bug report |
-
-The keybind sends `SIGUSR1` and the process keeps running, so his position,
-snooze state and which tips he's seen all survive.
 
 Not everything he says is a tip. Some of it is just him, and how much shifts
 over time: a new user gets almost all keybindings — remarks are about 15% of it —
@@ -190,13 +217,13 @@ does anything. It's just him.
 
 He lives on one monitor. A layer surface belongs to a single output, and the
 compositor puts him on whichever one has keyboard focus when he starts;
-`--monitor DP-1` picks one instead; if that output isn't connected he says so
-on stderr, names what is, and takes the focused one — so the flag is safe in
-`autostart.lua` on a laptop that boots undocked. His saved spot is in that monitor's own pixels, so it doesn't
-carry between outputs of different sizes — a corner on a 1080p screen is
-mid-screen on a scaled laptop panel. If the monitor he's on is unplugged, the
-compositor moves him to another and he pulls himself back inside its edges,
-so he stays visible and draggable.
+`--monitor DP-1` picks one instead, and if that output isn't connected he
+says so on stderr, names what is, and takes the focused one — so the flag is
+safe in `autostart.lua` on a laptop that boots undocked. His saved spot is in
+that monitor's own pixels, so it doesn't carry between outputs of different
+sizes: a corner on a 1080p screen is mid-screen on a scaled laptop panel. If
+the monitor he's on is unplugged, the compositor moves him to another and he
+pulls himself back inside its edges, so he stays visible and draggable.
 
 He is cheap to keep. A frame is drawn only when something in it changed — a
 blink, an ear, a step — so a parked deer redraws a few dozen times a minute,
@@ -248,7 +275,14 @@ a description becomes a tip in your words (topic `yours`, at most 25, never
 checked against the compositor — it came from the config). A key in that file
 is one you rebound, so if a curated tip has it as its headline, your tip
 replaces it: `Super + S` stops being "the scratchpad" and becomes whatever you
-called it. `--no-own` turns this off.
+called it. The existence check above couldn't catch that on its own —
+`Super + S` was still bound, just to something else — and no table of stock
+descriptions was needed to fix it. `--no-own` turns this off.
+
+What isn't installed is withheld too. One `pacman -Qq` at startup drops the
+tips that are useless without a package that isn't there: no Ghostty tips on
+a Foot machine, no 1Password tip without 1Password. Twenty tips over thirteen
+packages; `--no-packages` turns it off.
 
 `yoru --verify-report` prints exactly what he's holding back and why.
 `--list` and `--ask` still show everything — suppression only applies to what
@@ -291,36 +325,33 @@ A line with no `|` becomes idle chatter.
 
 The next versions are about making him yours rather than generic.
 
-- ~~**Catch rebinds, not just unbinds.**~~ Done, and not the way this bullet
-  expected. Checking that a key exists couldn't tell that `Super + S` still
-  existed but now opened your scratch notes. The fix needed no stock
-  description table: a key in your own `~/.config/hypr/bindings.lua` is one
-  you rebound, so your description replaces the curated tip. See
-  [Your bindings](#your-bindings).
-- ~~**Drop what you haven't installed.**~~ Done. One `pacman -Qq` at startup
-  withholds the tips that are useless without a package that isn't there —
-  no Ghostty tips on a Foot machine, no 1Password tip without 1Password.
-  Twenty tips over thirteen packages; `--verify-report` says which and why;
-  `--no-packages` turns it off.
 - **Weight by what you actually use.** He already watches window focus; over
   weeks that's a real usage model, not uniform random.
-- **Generate tips from your own configs** — `bindings.lua` is done (above);
-  aliases in `~/.bashrc` and your scratchpad scripts are not.
+- **Generate tips from your own configs** — `bindings.lua` is done (see
+  [Your bindings](#your-bindings)); aliases in `~/.bashrc` and your
+  scratchpad scripts are not.
 - **Frequency decay**, so he tapers as you learn instead of running at a fixed
   interval forever.
-- **A position that survives docking.** His saved spot is one monitor's
-  pixels, so unplugging or re-plugging a monitor still moves him: a corner on
-  a 1080p screen is mid-screen on a scaled laptop panel. He stays visible now
-  (he pulls himself inside the new edges), but not where you left him. Storing
-  the position as a corner plus an offset, or as fractions of the surface,
-  would fix it; which of those is right needs a few weeks of actually docking
-  before it's decided, and either changes what `state.json` means for
-  existing users.
+- **A position that survives docking.** Corner plus offset, or fractions of
+  the surface? Deciding needs a few weeks of actually docking, and either
+  changes what `state.json` means for existing users.
 
 **A line this project won't cross.** Personalization here means reading files
 you wrote and noticing which window has focus. It will never mean watching
 keystrokes to infer which bindings you don't know. That's a keylogger, and it's
 precisely the predatory quality that made Clippy hated.
+
+---
+
+## Key Details
+
+| | |
+|---|---|
+| **Official Name** | Yoru (夜 — "night", after the Tokyo Night palette he was drawn in) |
+| **Program/Feature Name** | The Omarchy Assistant |
+| **Software** | Omarchy 4 "Quattro" · Hyprland · Wayland |
+| **Nickname** | The deer |
+| **Predecessor** | Clippit, the Microsoft Office Assistant (1997–2007), may he rest |
 
 ---
 

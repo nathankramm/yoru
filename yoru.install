@@ -1,0 +1,15 @@
+post_install() {
+  cat <<'MSG'
+Yoru is at /usr/bin/yoru. Starting him at login and the key that hides him
+are your Hyprland config, which a package does not write. Two lines:
+
+  ~/.config/hypr/autostart.lua
+    o.launch_on_start("/usr/bin/yoru")
+
+  ~/.config/hypr/bindings.lua
+    o.bind("SUPER + CTRL + Y", "Toggle Yoru", "pkill -USR1 -f 'python3 /usr/bin/yoru( |$)'")
+
+Autostart takes effect at your next login; until then:  yoru &
+Try the knobs first:  yoru --interval 20 --roam 20 --idle 0
+MSG
+}

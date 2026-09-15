@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+# makepkg, if run in the checkout
+/src/
+/pkg/
+*.pkg.tar.zst
+*.tar.gz

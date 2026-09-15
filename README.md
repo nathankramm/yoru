@@ -123,6 +123,15 @@ git pull && ./install.sh
 line and the binding — and asks before touching `~/.config/yoru`, which is
 yours: his position, what he has said, what you retired.
 
+### From the AUR
+
+Once it's there, `yay -S yoru` puts him at `/usr/bin/yoru` and nothing else:
+starting him at login and the key that hides him are lines in your own
+Hyprland config, which a package doesn't write. `pacman` prints the two lines
+after install; they're the ones in the by-hand block below, with
+`/usr/bin/yoru` in place of `~/.local/bin/yoru`. `install.sh` isn't the
+answer there — it needs this checkout, and a packaged user hasn't got one.
+
 <details>
 <summary>By hand, if you'd rather see each step</summary>
 
@@ -178,7 +187,7 @@ yoru --forget-known       # un-retire everything
 
 | Flag | Default | |
 |---|---|---|
-| `--interval` | 300 | average seconds between ambient tips |
+| `--interval` | 900 | average seconds between utterances — tips and remarks alike; remarks take 15–40% of the slots. 300 until the sixteen first-hour tips are done; doubles per pass through the corpus, to at most 4× |
 | `--roam` | 180 | average seconds between short walks |
 | `--idle` | 300 | seconds before he assumes you've left (`0` = always on) |
 | `--cooldown` | 90 | minimum quiet before a contextual tip |
@@ -204,6 +213,17 @@ Not everything he says is a tip. Some of it is just him, and how much shifts
 over time: a new user gets almost all keybindings — remarks are about 15% of it —
 and the share climbs to roughly 40% once you've worked through the manual. He
 keeps teaching first, and gets more opinionated as the teaching runs out.
+
+He starts fast and slows down. While any of the sixteen first-hour tips is
+unseen he speaks about every five minutes, so a new user has all sixteen
+inside the first sitting — about ninety minutes. After that it's
+`--interval`, fifteen minutes by default: three tips and a remark an hour,
+and the 189 last a couple of working weeks rather than three days. Each time
+he has been through the whole corpus the gap doubles, to at most four times
+what you asked for — a second hearing is worth less than a first, and he
+should never fall silent. An explicit `--interval` under 300 wins from the
+start; so does `--no-basics`. [`tools/exhaust.py`](tools/exhaust.py) is the
+model these numbers came from.
 
 ---
 
@@ -330,8 +350,6 @@ The next versions are about making him yours rather than generic.
 - **Generate tips from your own configs** — `bindings.lua` is done (see
   [Your bindings](#your-bindings)); aliases in `~/.bashrc` and your
   scratchpad scripts are not.
-- **Frequency decay**, so he tapers as you learn instead of running at a fixed
-  interval forever.
 - **A position that survives docking.** Corner plus offset, or fractions of
   the surface? Deciding needs a few weeks of actually docking, and either
   changes what `state.json` means for existing users.

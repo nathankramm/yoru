@@ -1,5 +1,5 @@
 import collections, datetime, glob, importlib.util, os, random, shutil
-import tempfile, types, sys, re, time
+import statistics, tempfile, types, sys, re, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REAL_HOME = os.environ.get("HOME", "")      # for the one check that reads a real user file
 os.environ["HOME"] = tempfile.mkdtemp()
@@ -62,6 +62,7 @@ ck("16 3h idle spends nothing", len(p.seen) == 0)
 gz = []; hm = []; tp = []; bd = 0; tg = mg = 0; spd = set()
 for seed in range(8):
     random.seed(seed); p = m.Pet(O, m.KNOWLEDGE); p.seen = set()
+    p.passes = 0            # check 10 cycled the corpus in this HOME: state.json says passes=1
     now = 0.0; p.step(.033, now, 1920, 1080)
     c = collections.Counter(); md = collections.Counter(); n = 0
     for i in range(int(7200 / .033)):
@@ -304,8 +305,10 @@ q = m.Pet(O, m.KNOWLEDGE); q.seen = set(); q.next_talk = 1e9; q.next_roam = 1e9;
 q.blink = q.ear = q.tail = 0; q.next_blink = q.next_ear = q.next_tail = 1e9
 q.step(.033, 0.0, 1920, 1080); k = q.render_key(); static = all(
     (q.step(.033, 1 + i * .033, 1920, 1080) or q.render_key()) == k for i in range(300))
-q.next_roam = 0; q.speed = 60; q.step(.033, 20.0, 1920, 1080)
-keys = []
+q.next_roam = 0; q.step(.033, 20.0, 1920, 1080)      # the walk starts here...
+q.target = q.home_x - 400; q.speed = 60             # ...with a random target and
+keys = []                                            # gait; pin both, or a short
+                                                     # draw arrives and pauses
 for i in range(60):
     q.step(.033, 21 + i * .033, 1920, 1080); keys.append(q.render_key())
 walking = q.mode in ("out", "back") and len(set(keys)) > 40
@@ -327,4 +330,54 @@ ctx = m.GLib.MainContext.default(); end = time.monotonic() + 0.4
 while time.monotonic() < end: ctx.iteration(False); time.sleep(0.01)
 ck("36 hidden does no work", "tick" in started and after_stop == {} and ticks["n"] == 0,
    "sources while shown %s; after stop %s; callbacks in 0.4s hidden: %d" % (sorted(started), after_stop, ticks["n"]))
+# Cadence. Two speeds and a decay, all from tools/exhaust.py. A fresh user at
+# the default has all sixteen fundamentals inside roughly ninety minutes of
+# presence (300 s, ~19 utterances at 15% chatter); after that the gap between
+# utterances averages --interval; an explicit --interval under 300 wins in
+# both phases; --quiet and --no-basics behave; and the base doubles per
+# completed pass, capped, so he slows down but never stops.
+def sim_utterances(p, hours, until=None):
+    """Drive the real step() at 1 s ticks with someone present. Returns the
+    utterance times (s) and the presence time at which `until` first held."""
+    times = []; hit = None; now = 0.0
+    p.saw_activity(0.0); p.step(1.0, now, 1920, 1080)
+    for sec in range(int(hours * 3600)):
+        now += 1.0
+        if sec % 60 == 0: p.saw_activity(now)
+        was = p.text; p.step(1.0, now, 1920, 1080)
+        if p.text and not was: times.append(now)
+        if hit is None and until is not None and until(p): hit = now
+    return times, hit
+def cad_pet(**kw):
+    q = fresh_pet(**kw); q.passes = 0; return q
+q = cad_pet(interval=900)
+_, t16 = sim_utterances(q, 4, until=lambda p: not p.basics_open())
+basics_ok = t16 is not None and 45 * 60 <= t16 <= 150 * 60
+q = cad_pet(interval=900); q.seen = set(m.FUNDAMENTAL)     # tier already closed
+t, _ = sim_utterances(q, 12)
+gaps = [b - a for a, b in zip(t, t[1:])]
+rate_ok = gaps and abs(statistics.mean(gaps) - 900) / 900 < 0.15
+fast = cad_pet(interval=60)
+fast_ok = fast.cadence() == 60 and (fast.seen.update(m.FUNDAMENTAL) or fast.cadence() == 60)
+quiet_ok = cad_pet(interval=900, quiet=True).cadence() >= 1e8
+nb = cad_pet(interval=900, no_basics=True); nb_ok = nb.cadence() == 900 and not nb.basics_open()
+sup_pet = cad_pet(interval=900); sup_pet.seen = set(m.FUNDAMENTAL) - {"cli:omarchy update"}
+m.suppressed["cli:omarchy update"] = "test"; sup_ok = not sup_pet.basics_open(); m.suppressed.clear()
+dec = cad_pet(interval=900); dec.seen = set(m.FUNDAMENTAL); curve = []
+for dec.passes in (0, 1, 2, 3, 10): curve.append(dec.cadence())
+decay_ok = curve == [900, 1800, 3600, 3600, 3600]
+# a real pass end bumps the counter through mark_seen and lands in state.json
+w = cad_pet(interval=900); w.seen = {m.tip_id(t) for t in m.KNOWLEDGE[1:]}
+w.mark_seen(m.KNOWLEDGE[0]); passes_ok = w.passes == 1 and m.read_state().get("passes") == 1 and not w.seen
+second = cad_pet(interval=900); second.passes = 1; second_ok = not second.basics_open() and second.cadence() == 1800
+ck("37 fundamentals clear in ~90 min at the default", basics_ok,
+   "all 16 after %s min" % (t16 // 60 if t16 else "never"))
+ck("38 after the basics, utterances average --interval", rate_ok,
+   "%d gaps, mean %.0fs for --interval 900" % (len(gaps), statistics.mean(gaps) if gaps else 0))
+ck("39 explicit low --interval wins; --quiet and --no-basics hold; a withheld fundamental can't hold the tier",
+   fast_ok and quiet_ok and nb_ok and sup_ok,
+   "60 -> %s both phases; quiet %s; no-basics %s; suppressed %s" % (fast_ok, quiet_ok, nb_ok, sup_ok))
+ck("40 cadence doubles per pass and caps", decay_ok and passes_ok and second_ok,
+   "passes 0,1,2,3,10 -> %s; pass end -> passes=%d in state.json, seen cleared %s; pass 2 is never the tutorial" % (
+       curve, w.passes, not w.seen))
 print("\n%d/%d  FAILURES: %s" % (N - len(F), N, F or "none"))

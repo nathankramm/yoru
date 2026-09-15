@@ -18,7 +18,9 @@ Where he sits
     (falls back to the focused one if that output isn't connected).
 
 What he does
-    Ambient  — a tip every few minutes, never twice until he's run out.
+    Ambient  — a tip or a remark every fifteen minutes, every five until
+                 the sixteen first-hour tips are done, and slower on each
+                 pass through the corpus. Never a tip twice until he's run out.
     Contextual — when you focus a new app he offers something for that app,
                  at most twice per app per day, never inside the cooldown.
     On demand  — right click for the next tip, middle click to snooze an hour.
@@ -985,10 +987,21 @@ class Bag:
         return self.pool.pop()
 
 
+# Cadence. He starts fast and slows down. While the fundamentals tier is
+# open he speaks every BASICS_INTERVAL seconds, so a new user has all sixteen
+# inside the first sitting; after that it is --interval. Each time he has
+# been through the whole corpus the gap doubles — a second hearing is worth
+# less than a first — up to DECAY_CAP times what was asked for, so he never
+# goes silent. tools/exhaust.py is where these numbers came from.
+BASICS_INTERVAL = 300
+DECAY_CAP = 4
+
+
 class Pet:
     def __init__(self, opts, tips):
         self.px = opts.scale
         self.interval = opts.interval
+        self.quiet = getattr(opts, "quiet", False)
         self.roam = opts.roam
         self.margin = opts.margin
         self.corner = opts.corner
@@ -1000,7 +1013,10 @@ class Pet:
         self.current = None
         # How much of the manual he has already handed over, counted across
         # every session. Drives the chatter ratio below.
-        self.shown = read_state().get("shown", 0)
+        st = read_state()
+        self.shown = st.get("shown", 0)
+        # Completed passes through the corpus, for the decay.
+        self.passes = st.get("passes", 0)
         self.chatter = Bag(CHATTER)
         self.late = Bag(LATE)
         self.pokes = Bag(POKES)
@@ -1103,13 +1119,37 @@ class Pet:
 
     def mark_seen(self, tip):
         self.shown += 1
-        st = read_state()
-        st["shown"] = self.shown
-        save_json(STATE, st)
         self.seen.add(tip_id(tip))
         if len(self.seen) >= len(self.tips) - len(suppressed):
             self.seen.clear()
+            self.passes += 1
+            debug("pass %d complete; cadence now %.0fs", self.passes,
+                  self.cadence())
+        st = read_state()
+        st["shown"] = self.shown
+        st["passes"] = self.passes
+        save_json(STATE, st)
         save_json(SEEN, sorted(self.seen))
+
+    def basics_open(self):
+        """True while a fundamental is still to be taught on the first pass:
+        unseen, not retired, and not withheld by the binding or package
+        checks (a tip he can never say must not hold the fast phase open).
+        Second and later passes are never the tutorial again."""
+        return (self.basics and self.passes == 0 and any(
+            tid in FUNDAMENTAL and tid not in self.seen
+            and tid not in self.known and tid not in suppressed
+            for tid in (tip_id(t) for t in self.tips)))
+
+    def cadence(self):
+        """Average seconds between utterances right now. An explicit
+        --interval below the basics rate wins in both phases: someone
+        asking for fast means it."""
+        if self.quiet:
+            return 1e9
+        if self.basics_open():
+            return min(self.interval, BASICS_INTERVAL)
+        return self.interval * min(2 ** self.passes, DECAY_CAP)
 
     def pick(self, cls="", context=None, why="ambient"):
         """Prefer an unseen tip, and the most specific context match.
@@ -1254,8 +1294,8 @@ class Pet:
                       else "away" if not self.present(now) else "hidden")
                 self.next_talk = 30.0
             else:
-                self.next_talk = random.uniform(self.interval * 0.6,
-                                                self.interval * 1.4)
+                cadence = self.cadence()
+                self.next_talk = random.uniform(cadence * 0.6, cadence * 1.4)
                 head, text = self.next_ambient()
                 self.say(head, text, 8.0, now)
 
@@ -1560,8 +1600,10 @@ def main(argv=None):
     p.add_argument("--corner", default="br", choices=["br", "bl", "tr", "tl"],
                    help="where he parks on first run (default bottom right)")
     p.add_argument("--margin", type=int, default=24, help="gap from the screen edge")
-    p.add_argument("--interval", type=float, default=300,
-                   help="average seconds between ambient tips (default 300)")
+    p.add_argument("--interval", type=float, default=900,
+                   help="average seconds between utterances, tips and remarks "
+                        "alike, once the first-hour tips are done (default 900; "
+                        "300 until then; doubles per pass through the corpus)")
     p.add_argument("--roam", type=float, default=180,
                    help="average seconds between short walks (default 180)")
     p.add_argument("--idle", type=float, default=300,
@@ -1624,8 +1666,6 @@ def main(argv=None):
     if not tips:
         print("No tips match --topics %s" % opts.topics, file=sys.stderr)
         return 1
-    if opts.quiet:
-        opts.interval = 1e9
     if not opts.no_packages:
         load_packages()
     if opts.verify_report:
@@ -2116,9 +2156,10 @@ def run(opts, tips):
               "yes" if LayerShell else "no",
               "yes" if shutil.which("hyprctl") else "no",
               "GLibUnix" if GLibUnix else "GLib (deprecated)")
-        debug("start: %d tips | %d seen, %d retired, %d shown | introduced %s "
-              "| home %s | %s", len(tips), len(load_seen()), len(load_known()),
-              st.get("shown", 0), bool(st.get("introduced")),
+        debug("start: %d tips | %d seen, %d retired, %d shown, %d passes | "
+              "introduced %s | home %s | %s", len(tips), len(load_seen()),
+              len(load_known()), st.get("shown", 0), st.get("passes", 0),
+              bool(st.get("introduced")),
               load_home() or "default %s" % opts.corner, CONFIG)
     # Dispatched from the main loop, not from inside the signal handler, so
     # the flip can never land in the middle of a frame.

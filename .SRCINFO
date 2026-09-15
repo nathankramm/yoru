@@ -1,0 +1,20 @@
+pkgbase = yoru
+	pkgdesc = A pixel deer in the corner of your screen that teaches you Omarchy
+	pkgver = 1.0.0
+	pkgrel = 1
+	url = https://github.com/nathankramm/yoru
+	install = yoru.install
+	arch = any
+	license = MIT
+	depends = python
+	depends = python-gobject
+	depends = gtk4
+	depends = gtk4-layer-shell
+	depends = python-cairo
+	depends = pango
+	depends = glib2
+	optdepends = hyprland: focused-window context, live binding checks and the hide/show key
+	source = yoru-1.0.0.tar.gz::https://github.com/nathankramm/yoru/archive/refs/tags/v1.0.0.tar.gz
+	sha256sums = 0090755e689e06b2f8369d4cbacaae54ffece52808b501a335d3f41b12ea05fb
+
+pkgname = yoru

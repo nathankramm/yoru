@@ -56,7 +56,7 @@ import sys
 import tempfile
 import time
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 CONFIG = os.path.expanduser("~/.config/yoru")
 STATE = os.path.join(CONFIG, "state.json")

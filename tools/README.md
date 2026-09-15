@@ -93,3 +93,28 @@ the twenty minutes.
     python3 tools/verify-tips.py --all       # read the AGREES labels
     python3 tools/verify-tips.py --others    # walk the other topics against the tree
     python3 yoru.py --verify-report          # what he will actually withhold here
+
+## release.sh
+
+Cuts a release in the only order that works. Doing it by hand once tagged
+before bumping, and the package said 1.0.1 while the binary inside it said
+1.0.0; nothing in the toolchain noticed.
+
+    tools/release.sh 1.2.0             # the real thing
+    tools/release.sh 1.2.0 --dry-run   # every check; no commit, tag or push
+
+Refuses a dirty tree, a branch other than main, a main behind origin, a
+version that is already tagged, or one yoru.py already says. Then: sets
+VERSION, runs audit.py and stops on any failure, commits the bump on its
+own, tags and pushes main and the tag, fetches the tarball GitHub built
+for that tag, **checks that the tarball's yoru.py says the version** (the
+step that would have caught it), writes pkgver and sha256sums into
+PKGBUILD, regenerates .SRCINFO, builds with makepkg against that tarball,
+extracts the package into a throwaway root and asserts `usr/bin/yoru
+--version` matches, and commits PKGBUILD and .SRCINFO. It does not push
+that commit and never touches the AUR. Stops at the first failure; until
+the bump is committed, a failure puts yoru.py back.
+
+`AUDIT=` and `RELEASE_URL=` (a `file://` base works) exist to test the
+script's own failure paths against a fake audit or a fake tarball. Never
+for a release.

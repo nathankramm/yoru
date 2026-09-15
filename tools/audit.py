@@ -380,4 +380,44 @@ ck("39 explicit low --interval wins; --quiet and --no-basics hold; a withheld fu
 ck("40 cadence doubles per pass and caps", decay_ok and passes_ok and second_ok,
    "passes 0,1,2,3,10 -> %s; pass end -> passes=%d in state.json, seen cleared %s; pass 2 is never the tutorial" % (
        curve, w.passes, not w.seen))
+# --no-theme, after a full start. A real do_activate() on a NON_UNIQUE
+# application (so GTK does not forward it to a deer already running) with
+# start_hidden, so the surface it maps draws nothing and takes no input.
+# The palette must be the built-in one and the theme must never have been
+# read; and the binding re-check, which has nothing to do with themes, must
+# still be scheduled, still call refresh_suppressed, and still throttle to
+# 30 s when nobody is there.
+from gi.repository import Gio
+m.PAL.update(BUILTIN); m.visible = False
+calls = {"apply": 0, "read": 0, "refresh": 0}
+real_apply, real_read, real_refresh = m.apply_theme, m.read_theme, m.refresh_suppressed
+m.apply_theme = lambda: (calls.__setitem__("apply", calls["apply"] + 1) or real_apply())
+m.read_theme = lambda: (calls.__setitem__("read", calls["read"] + 1) or real_read())
+m.refresh_suppressed = lambda tips: (calls.__setitem__("refresh", calls["refresh"] + 1) or real_refresh(tips))
+nt = m.build_app(types.SimpleNamespace(**dict(vars(O), no_theme=True, no_context=True, quiet=True,
+                                               start_hidden=True, layer="overlay", monitor=None, topics="")),
+                 m.KNOWLEDGE)
+nt.set_flags(Gio.ApplicationFlags.NON_UNIQUE); nt.register()
+sched = []; orig_schedule = nt._schedule
+nt._schedule = lambda name, fn, secs: (sched.append((name, secs)), orig_schedule(name, fn, secs))[1]
+nt.do_activate(); nt.start()
+ctx = m.GLib.MainContext.default(); end = time.monotonic() + 0.3
+while time.monotonic() < end: ctx.iteration(False); time.sleep(0.01)
+started_nt = sorted(nt._sources)
+ck("41 --no-theme never reads the theme, palette stays built in",
+   not nt.get_is_remote() and m.PAL == BUILTIN and calls["apply"] == 0 and calls["read"] == 0
+   and "theme" not in started_nt,
+   "after do_activate+start: PAL %s, apply_theme %d, read_theme %d, sources %s"
+   % ("unchanged" if m.PAL == BUILTIN else "CHANGED", calls["apply"], calls["read"], started_nt))
+now = m.GLib.get_monotonic_time() / 1e6
+nt.pet.saw_activity(now); sched.clear(); nt._sources.pop("binds", None); before = calls["refresh"]
+nt.poll_binds(); here = list(sched)
+nt.pet.present_until = 0.0; sched.clear(); nt._sources.pop("binds", None)
+nt.poll_binds(); away = list(sched)
+ck("42 binding re-check runs on its own source under --no-theme, and throttles away",
+   "binds" in started_nt and calls["refresh"] - before == 2 and here == [("binds", 4)] and away == [("binds", 30)],
+   "scheduled at start %s; poll_binds -> refresh_suppressed +%d; rescheduled %s present, %s away"
+   % (started_nt, calls["refresh"] - before, here, away))
+nt.stop(); nt.win.destroy()
+m.apply_theme, m.read_theme, m.refresh_suppressed = real_apply, real_read, real_refresh
 print("\n%d/%d  FAILURES: %s" % (N - len(F), N, F or "none"))

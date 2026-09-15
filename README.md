@@ -44,6 +44,71 @@ The one thing the research said to keep: humour. Agents that joked were rated
 
 ---
 
+## What it reads and runs
+
+Everything `yoru.py` touches on your machine, from the source. Paths are
+under your home unless shown otherwise.
+
+**Reads**
+
+| Path | When | Why |
+|---|---|---|
+| `~/.config/yoru/state.json`, `seen.json`, `known.json` | start | his position, tips shown and passes made, tips seen this pass, tips you retired |
+| `~/.config/yoru/tips.txt` | start, also for `--list`/`--ask` | your own tips and remarks |
+| `~/.config/hypr/bindings.lua` | start, also for `--list`/`--ask` | your `o.bind` lines become tips; a key in it replaces the stock tip for that key. `--no-own` skips it |
+| `~/.local/state/omarchy/current/theme/colors.toml` | mtime every 4 s (30 s when you're away); parsed only if `omarchy-theme-color` is absent | notice a theme switch; the palette, as a fallback. Not touched under `--no-theme` |
+| `~/.local/state/omarchy/current/theme.name` | mtime on the same beat; contents only with `--debug` | notice a theme switch; name the theme in the log. Not touched under `--no-theme` |
+
+**Writes** — all of it inside `~/.config/yoru/`, which he creates
+
+| Path | When | What |
+|---|---|---|
+| `state.json` | after a drag, the intro, and each tip | `x`, `y`, `shown`, `passes`, `introduced` |
+| `seen.json` | each tip | ids of tips said this pass |
+| `known.json` | left click on a tip; `--forget-known` empties it | ids of tips you retired |
+| `.<name>.*.tmp` | during each write | written and renamed into place, so a crash can't truncate the file |
+
+**Runs** — every subprocess, with its arguments
+
+| Command | When | Why |
+|---|---|---|
+| `hyprctl -j activewindow` | every 2 s; every 30 s when you're away or he's snoozed | the focused window's class and title, to pick a tip for the app in front of you. Matched in memory against words like `nvim`, then dropped; the title is never written and never logged |
+| `hyprctl -j cursorpos` | same beat | whether the pointer has moved: the presence signal |
+| `hyprctl binds` | start, then every 4 s (30 s when you're away) | which bindings exist here, so a rebound key's tip is withheld. `--verify-report` prints the result |
+| `omarchy-theme-color --all`, else `omarchy theme color --all` | start, and whenever the theme files' mtime changes | the palette, through Omarchy's own resolver. Never run under `--no-theme` |
+| `pacman -Qq` | once at start | which packages are installed, so tips about absent software are withheld. `--no-packages` skips it |
+
+Each has a timeout of five seconds or less, and each fails open: if
+`hyprctl` or `pacman` can't be run, nothing is withheld and the palette
+stays built in.
+
+**Loads** — `libgtk4-layer-shell.so` through `ctypes`, before GTK, which
+is how a layer-shell surface has to be set up. GTK itself connects to the
+Wayland display socket, as any window does.
+
+**Not done**
+
+- No network. Nothing in the file imports a socket, an HTTP client or a
+  URL; there is no update check and nothing is reported anywhere.
+- No `sudo`, no root, nothing written outside `~/.config/yoru`.
+- No keyboard. The surface is created with keyboard mode `NONE`; the
+  compositor never delivers a key to him. Hiding him is a Hyprland binding
+  that sends `SIGUSR1` from outside.
+- No clipboard, no screen capture, no reading of other windows' contents —
+  only the focused window's class and title, above.
+- `--debug` writes to stderr only: decisions, tip ids, window *classes*,
+  the theme's name. Not titles.
+
+**At install time**, which is separate from him running: `install.sh` runs
+`pacman -Q` for the four dependencies, copies `yoru.py` to
+`~/.local/bin/yoru`, and appends one line each to
+`~/.config/hypr/autostart.lua` and `~/.config/hypr/bindings.lua`, backing
+each up to `<file>.bak-<timestamp>` first. `uninstall.sh` reverses those
+and asks before removing `~/.config/yoru`. The package puts the binary at
+`/usr/bin/yoru` and prints the two lines instead of writing them.
+
+---
+
 ## What he says
 
 Six of the 189, as `yoru --list` prints them:
@@ -203,7 +268,7 @@ yoru --forget-known       # un-retire everything
 | `--topics` | | e.g. `nvim,tmux` — limit him |
 | `--quiet` | | contextual tips only |
 | `--no-context` | | ignore the focused window |
-| `--no-theme` | | keep the built-in palette |
+| `--no-theme` | | keep the built-in palette; the theme files are never read |
 | `--no-own` | | don't turn your own `~/.config/hypr/bindings.lua` binds into tips |
 | `--no-basics` | | skip the sixteen first-hour tips he otherwise leads with |
 | `--no-packages` | | teach software whether or not `pacman` says it's installed |

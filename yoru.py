@@ -1901,11 +1901,15 @@ def build_app(opts, tips):
             area.add_controller(drag)
 
             self.win, self.area = win, area
-            themed = apply_theme()
-            if DEBUG:
-                debug("theme: %s at start (%s)", _theme_label(),
-                      "applied" if themed else "unreadable, built-in palette")
-            self._theme_stamp = theme_stamp()
+            # --no-theme means the built-in palette and no look at the theme
+            # files at all, at start or later.
+            self._theme_stamp = None
+            if not opts.no_theme:
+                themed = apply_theme()
+                if DEBUG:
+                    debug("theme: %s at start (%s)", _theme_label(),
+                          "applied" if themed else "unreadable, built-in palette")
+                self._theme_stamp = theme_stamp()
             win.present()
             if not read_state().get("introduced"):
                 GLib.timeout_add_seconds(4, self.intro)
@@ -1915,7 +1919,7 @@ def build_app(opts, tips):
 
         # -- scheduling --------------------------------------------------
         # Every recurring job is a source in self._sources, so hiding him
-        # can stop all of it and showing him can start it again. The two
+        # can stop all of it and showing him can start it again. The
         # polls reschedule themselves each time with an interval chosen
         # from what the machine is doing: 2s and 4s with someone there,
         # 30s when presence says they're away or he's snoozed. The first
@@ -1928,6 +1932,9 @@ def build_app(opts, tips):
             self._sources["tick"] = GLib.timeout_add(33, self.tick)
             if not opts.no_theme:
                 self._schedule("theme", self.poll_theme, 4)
+            # The binding re-check is its own source: it has nothing to do
+            # with themes, and must not vanish with --no-theme.
+            self._schedule("binds", self.poll_binds, 4)
             if not opts.no_context:
                 self.poll_context()     # now, so a window you're in gets its
                                         # tip; it schedules the next itself
@@ -2021,8 +2028,7 @@ def build_app(opts, tips):
             save_json(STATE, state)
 
         def poll_theme(self):
-            """Repaint when the Omarchy theme changes, silently. Bindings are
-            re-read on the same beat, so a rebind lands without a restart."""
+            """Repaint when the Omarchy theme changes, silently."""
             stamp = theme_stamp()
             if stamp != self._theme_stamp:
                 self._theme_stamp = stamp
@@ -2031,8 +2037,13 @@ def build_app(opts, tips):
                 if DEBUG:
                     debug("theme: reloaded %s (%s)", _theme_label(),
                           "applied" if themed else "unreadable, palette kept")
-            refresh_suppressed(self.pet.tips)
             return self._reschedule("theme", self.poll_theme, 4,
+                                    GLib.get_monotonic_time() / 1e6)
+
+        def poll_binds(self):
+            """Re-read hyprctl binds, so a rebind lands without a restart."""
+            refresh_suppressed(self.pet.tips)
+            return self._reschedule("binds", self.poll_binds, 4,
                                     GLib.get_monotonic_time() / 1e6)
 
         # -- context -----------------------------------------------------

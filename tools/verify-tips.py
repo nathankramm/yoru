@@ -38,6 +38,7 @@ import yoru  # noqa: E402
 
 # Where to look for the tips the compositor can't vouch for.
 OTHERS = {
+    "grammar": "tools/stock-binds.lua stock force, grouped by modifier set; the fractions in the KNOWLEDGE comment",
     "cli": "bin/omarchy-* headers (# omarchy:summary / :args), `omarchy commands --all`",
     "updates": "bin/omarchy-update, bin/omarchy-snapshot, default/libalpm/hooks/",
     "fixes": "bin/, config/hypr/monitors.lua, default/hypr/input.lua",

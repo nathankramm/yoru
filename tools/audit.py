@@ -331,8 +331,8 @@ while time.monotonic() < end: ctx.iteration(False); time.sleep(0.01)
 ck("36 hidden does no work", "tick" in started and after_stop == {} and ticks["n"] == 0,
    "sources while shown %s; after stop %s; callbacks in 0.4s hidden: %d" % (sorted(started), after_stop, ticks["n"]))
 # Cadence. Two speeds and a decay, all from tools/exhaust.py. A fresh user at
-# the default has all sixteen fundamentals inside roughly ninety minutes of
-# presence (300 s, ~19 utterances at 15% chatter); after that the gap between
+# the default has every fundamental inside roughly a hundred minutes of
+# presence (300 s, ~21 utterances at 15% chatter); after that the gap between
 # utterances averages --interval; an explicit --interval under 300 wins in
 # both phases; --quiet and --no-basics behave; and the base doubles per
 # completed pass, capped, so he slows down but never stops.
@@ -370,8 +370,8 @@ decay_ok = curve == [900, 1800, 3600, 3600, 3600]
 w = cad_pet(interval=900); w.seen = {m.tip_id(t) for t in m.KNOWLEDGE[1:]}
 w.mark_seen(m.KNOWLEDGE[0]); passes_ok = w.passes == 1 and m.read_state().get("passes") == 1 and not w.seen
 second = cad_pet(interval=900); second.passes = 1; second_ok = not second.basics_open() and second.cadence() == 1800
-ck("37 fundamentals clear in ~90 min at the default", basics_ok,
-   "all 16 after %s min" % (t16 // 60 if t16 else "never"))
+ck("37 fundamentals clear in ~100 min at the default", basics_ok,
+   "all %d after %s min" % (len(m.FUNDAMENTAL), t16 // 60 if t16 else "never"))
 ck("38 after the basics, utterances average --interval", rate_ok,
    "%d gaps, mean %.0fs for --interval 900" % (len(gaps), statistics.mean(gaps) if gaps else 0))
 ck("39 explicit low --interval wins; --quiet and --no-basics hold; a withheld fundamental can't hold the tier",

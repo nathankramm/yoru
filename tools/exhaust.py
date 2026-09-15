@@ -42,7 +42,7 @@ def fresh(interval, **kw):
 
 def run(interval, hours_per_day, context, seed, **kw):
     """Simulate presence H hours a day until all N tips have been shown once.
-    Returns (hours_of_presence_to_exhaust, days, tips_per_hour, hours_to_all_16,
+    Returns (hours_of_presence_to_exhaust, days, tips_per_hour, hours_to_all_fundamentals,
              ctx_tips, chatter_lines, tips_per_hour_after_basics)."""
     random.seed(seed)
     p = fresh(interval, **kw)
@@ -104,8 +104,8 @@ rows = [(300, {}), (600, {}), (900, {}), (1800, {}), (900, {"no_basics": True})]
 for context in (False, True):
     print("Ambient only (no window switching), 6 h/day:" if not context else
           "With a developer's window switching (contextual tips on, capped 2/class/day), 6 h/day:")
-    print("| --interval | tips/h | after basics | %s | all 16 fundamentals | hours to 189 | days @4h | days @6h | days @8h |"
-          % ("chatter/h" if not context else "contextual/day"))
+    print("| --interval | tips/h | after basics | %s | all %d fundamentals | hours to %d | days @4h | days @6h | days @8h |"
+          % ("chatter/h" if not context else "contextual/day", len(FUND), N))
     print("|---|---|---|---|---|---|---|---|---|")
     for iv, kw in rows:
         label = "%d%s" % (iv, " --no-basics" if kw else "")

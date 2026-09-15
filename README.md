@@ -3,7 +3,7 @@
 > *It looks like you're using a tiling window manager. Would you like help with that?*
 
 A pixel deer lives in the corner of your screen and quietly teaches you
-Omarchy. He knows 189 things about it, notices which app you're in,
+Omarchy. He knows 194 things about it, notices which app you're in,
 follows your theme, and — unlike his spiritual ancestor — shuts up when you
 tell him to.
 
@@ -111,7 +111,7 @@ and asks before removing `~/.config/yoru`. The package puts the binary at
 
 ## What he says
 
-Six of the 189, as `yoru --list` prints them:
+Six of the 194, as `yoru --list` prints them:
 
 ```
 == windows
@@ -249,7 +249,7 @@ state and which tips he's seen all survive.
 From the terminal, no GUI involved:
 
 ```bash
-yoru --ask screenshot     # search all 189 tips
+yoru --ask screenshot     # search all 194 tips
 yoru --list               # everything, grouped by topic
 yoru --forget-known       # un-retire everything
 ```
@@ -258,7 +258,7 @@ yoru --forget-known       # un-retire everything
 
 | Flag | Default | |
 |---|---|---|
-| `--interval` | 900 | average seconds between utterances — tips and remarks alike; remarks take 15–40% of the slots. 300 until the sixteen first-hour tips are done; doubles per pass through the corpus, to at most 4× |
+| `--interval` | 900 | average seconds between utterances — tips and remarks alike; remarks take 15–40% of the slots. 300 until the eighteen first-hour tips are done; doubles per pass through the corpus, to at most 4× |
 | `--roam` | 180 | average seconds between short walks |
 | `--idle` | 300 | seconds before he assumes you've left (`0` = always on) |
 | `--cooldown` | 90 | minimum quiet before a contextual tip |
@@ -270,7 +270,7 @@ yoru --forget-known       # un-retire everything
 | `--no-context` | | ignore the focused window |
 | `--no-theme` | | keep the built-in palette; the theme files are never read |
 | `--no-own` | | don't turn your own `~/.config/hypr/bindings.lua` binds into tips |
-| `--no-basics` | | skip the sixteen first-hour tips he otherwise leads with |
+| `--no-basics` | | skip the eighteen first-hour tips he otherwise leads with |
 | `--no-packages` | | teach software whether or not `pacman` says it's installed |
 | `--start-hidden` | | begin off screen |
 | `--still` | | never walk, bound or graze — for anyone who finds movement at the edge of vision distracting; he still blinks and talks |
@@ -285,11 +285,11 @@ over time: a new user gets almost all keybindings — remarks are about 15% of i
 and the share climbs to roughly 40% once you've worked through the manual. He
 keeps teaching first, and gets more opinionated as the teaching runs out.
 
-He starts fast and slows down. While any of the sixteen first-hour tips is
-unseen he speaks about every five minutes, so a new user has all sixteen
-inside the first sitting — about ninety minutes. After that it's
+He starts fast and slows down. While any of the eighteen first-hour tips is
+unseen he speaks about every five minutes, so a new user has all eighteen
+inside the first sitting — about a hundred minutes. After that it's
 `--interval`, fifteen minutes by default: three tips and a remark an hour,
-and the 189 last a couple of working weeks rather than three days. Each time
+and the 194 last a couple of working weeks rather than three days. Each time
 he has been through the whole corpus the gap doubles, to at most four times
 what you asked for — a second hearing is worth less than a first, and he
 should never fall silent. An explicit `--interval` under 300 wins from the

@@ -19,7 +19,7 @@ Where he sits
 
 What he does
     Ambient  — a tip or a remark every fifteen minutes, every five until
-                 the sixteen first-hour tips are done, and slower on each
+                 the eighteen first-hour tips are done, and slower on each
                  pass through the corpus. Never a tip twice until he's run out.
     Contextual — when you focus a new app he offers something for that app,
                  at most twice per app per day, never inside the cooldown.
@@ -598,6 +598,21 @@ KNOWLEDGE = [
     # ---------------------------------------------------------- browser ----
     ("browser", WEB, "Install > Web App", "Turns a URL into a launcher. Log in with a real browser first."),
 
+    # ---------------------------------------------------------- grammar ----
+    # The shape of the map, not its contents. Fractions are from the
+    # installed 4.0.3 tree (tools/stock-binds.lua stock force, 228 binds):
+    # Super+Shift launches on 17 of 17 letters and moves the window on 14 of
+    # 15 focus keys; Super alone works the window or workspace on 32 of 42;
+    # Super+Ctrl is a panel, menu or toggle on 28 of 42; of the 62 pairs that
+    # differ only by Alt, 57 are a variant or sibling and 4 of the 5 that
+    # aren't are Super+Ctrl+Alt. Not bindings, so not in HYPR_TOPICS: a rule
+    # about the map must not be withheld because a key it mentions was rebound.
+    ("grammar", None, "Super + Shift + a letter", "Launches an app, every letter. On a number or arrow, Shift moves the window instead of you."),
+    ("grammar", None, "Super alone", "Three in four work the window or workspace in front of you. Close, float, focus, full screen."),
+    ("grammar", None, "Super + Ctrl", "Two in three are a panel, a menu or a toggle. Wi-Fi, Bluetooth, audio, nightlight, lock."),
+    ("grammar", None, "Alt", "Usually the same key's variant: private browser, file manager here, a smaller resize. Try it."),
+    ("grammar", None, "Super + Ctrl + Alt", "The exception to Alt. The letter picks a new word: B battery, T time, W weather, D calendar."),
+
     # ------------------------------------------------------------ emoji ----
     ("emoji", None, "CapsLock M S", "A smile. M H a heart, M Y a thumbs up."),
     ("emoji", None, "CapsLock Space Space", "An em dash. Space N your name, Space E your email. Small mercies, daily."),
@@ -626,6 +641,8 @@ FUNDAMENTAL = frozenset([
     "clipboard:Super + C",                  # copy and paste, in the terminal too
     "style:Super + Ctrl + Shift + Space",   # the theme picker: the payoff
     "cli:omarchy update",                   # the right way to update
+    "grammar:Super + Shift + a letter",     # 17 launchers and 14 window-moves in one sentence
+    "grammar:Alt",                          # 57 variants in another
 ])
 
 CHATTER = [
@@ -988,7 +1005,7 @@ class Bag:
 
 
 # Cadence. He starts fast and slows down. While the fundamentals tier is
-# open he speaks every BASICS_INTERVAL seconds, so a new user has all sixteen
+# open he speaks every BASICS_INTERVAL seconds, so a new user has all eighteen
 # inside the first sitting; after that it is --interval. Each time he has
 # been through the whole corpus the gap doubles — a second hearing is worth
 # less than a first — up to DECAY_CAP times what was asked for, so he never

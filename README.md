@@ -123,14 +123,20 @@ git pull && ./install.sh
 line and the binding — and asks before touching `~/.config/yoru`, which is
 yours: his position, what he has said, what you retired.
 
-### From the AUR
+### As a package
 
-Once it's there, `yay -S yoru` puts him at `/usr/bin/yoru` and nothing else:
-starting him at login and the key that hides him are lines in your own
-Hyprland config, which a package doesn't write. `pacman` prints the two lines
-after install; they're the ones in the by-hand block below, with
-`/usr/bin/yoru` in place of `~/.local/bin/yoru`. `install.sh` isn't the
-answer there — it needs this checkout, and a packaged user hasn't got one.
+```bash
+git clone https://github.com/nathankramm/yoru.git && cd yoru && makepkg -si
+```
+
+The `PKGBUILD` in the repo builds the tagged release from GitHub, checksum
+and all, and installs it through `pacman`. What that buys over `install.sh`:
+he shows up in `pacman -Q`, `pacman -R yoru` removes him, and an upgrade is
+`git pull && makepkg -si` with the old files replaced cleanly. A package
+still can't write the two lines that start him at login and hide him — they
+are your own Hyprland config — so `pacman` prints them at install time, with
+`/usr/bin/yoru` in place of `~/.local/bin/yoru`. They're the ones in the
+by-hand block below.
 
 <details>
 <summary>By hand, if you'd rather see each step</summary>

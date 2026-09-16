@@ -306,21 +306,38 @@ BOUND = [
 # Grazing swings that whole assembly down and out rather than redrawing it,
 # which keeps one animal instead of two that only mostly match.
 GRAZE_SHIFT = (2, 4)
+# Lying down is the same trick the other way about: the body drops by the
+# height of its legs less one row, so it sits on the legs folded under it,
+# and the head settles one row more, forward and down -- up enough to
+# watch, not the alert stand. The folded legs are a strip of shade along
+# the ground with the near hooves showing where a deer at rest shows them
+# from the side: one out ahead of the chest, the hind one beside the belly.
+REST_SHIFT = (0, 5)
+REST_HEAD = (1, 6)
+
+
+def _folded_legs(out):
+    for x in range(3, 19):
+        out.append((x, 23, FAR))
+    for x in list(range(9, 11)) + list(range(19, 21)):
+        out.append((x, 23, HOOF))
 
 
 def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False):
     out = []
     gait = BOUND if bound else GAIT
     near, far = gait[frame], gait[(frame + 2) % 4]
+    grazing, resting = pose == "graze", pose == "rest"
     # In a bound the animal leaves the ground, so the legs rise with the body;
-    # lifting the body alone just severs them.
+    # lifting the body alone just severs them. Lying down there is nothing
+    # to bob: he sits on the ground line whatever frame the gait is on.
     lift = near.get("lift", 0) if bound else 0
-    bob = (0 if bound else BOB[frame]) + lift
+    bob = 0 if resting else (0 if bound else BOB[frame]) + lift
 
-    _leg(out, 6, far["r1"], far["r2"], FAR, FAR_HOOF, lift)
-    _leg(out, 10, far["f1"], far["f2"], FAR, FAR_HOOF, lift)
+    if not resting:
+        _leg(out, 6, far["r1"], far["r2"], FAR, FAR_HOOF, lift)
+        _leg(out, 10, far["f1"], far["f2"], FAR, FAR_HOOF, lift)
 
-    grazing = pose == "graze"
     for y, row in enumerate(BODY):
         for x, ch in enumerate(row):
             if ch == ".":
@@ -329,19 +346,25 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False):
             dx, dy = 0, 0
             if grazing and y <= 11:
                 dx, dy = GRAZE_SHIFT
-            elif ear and y == 6 and x == 14:
-                out.append((x - 1, y + bob - 1, col))   # ear pricks up and back
+            elif resting:
+                dx, dy = REST_HEAD if y <= 11 else REST_SHIFT
+            if ear and not grazing and y == 6 and x == 14:
+                out.append((x + dx - 1, y + bob + dy - 1, col))   # ear pricks up and back
             out.append((x + dx, y + bob + dy, col))
 
     # A raised tail is the real signal a deer gives. Add to it, don't move it,
     # or the rump grows a gap.
     if tail and not grazing:
+        _, dy = REST_SHIFT if resting else (0, 0)
         for x in range(2):
-            out.append((x, 10 + bob, PAL["c"]))
-            out.append((x, 11 + bob, PAL["c"]))
+            out.append((x, 10 + bob + dy, PAL["c"]))
+            out.append((x, 11 + bob + dy, PAL["c"]))
 
-    _leg(out, 3, near["r1"], near["r2"], PAL["b"], HOOF, lift)
-    _leg(out, 13, near["f1"], near["f2"], PAL["b"], HOOF, lift)
+    if resting:
+        _folded_legs(out)
+    else:
+        _leg(out, 3, near["r1"], near["r2"], PAL["b"], HOOF, lift)
+        _leg(out, 13, near["f1"], near["f2"], PAL["b"], HOOF, lift)
     return out
 
 
@@ -1266,23 +1289,42 @@ class Pet:
         if DEBUG:
             self._trace(now)
 
+        # Lying down is what snooze and an empty chair look like. Middle
+        # click used to change nothing on screen, so the only way to see it
+        # had worked was to click again, which undid it. He lies down when
+        # snoozed or when nobody is here, and gets up the moment either
+        # ends -- and, like grazing, before he speaks or walks. Not gated
+        # on --still: it is a pose, not a movement. Hidden he is never
+        # stepped at all, so hidden he never lies down either.
+        rest = ((self.snoozing(now) or not self.present(now))
+                and self.mode == "home" and not self.text and self.pause <= 0)
+        if rest and self.pose != "rest":
+            self.pose = "rest"
+            self.graze_for = 0.0
+        elif self.pose == "rest" and not rest:
+            self.pose = "stand"
+        resting = self.pose == "rest"
+
+        # A motionless deer reads as crashed; a blinking one reads as
+        # asleep. So the blink never stops, and lying down it slows: the
+        # lids stay shut longer and the ear and tail go half as often.
         self.blink -= dt
         self.next_blink -= dt
         if self.next_blink <= 0:
-            self.blink = 0.11
+            self.blink = 0.25 if resting else 0.11
             self.next_blink = random.uniform(2.5, 7.5)
 
         self.ear -= dt
         self.next_ear -= dt
         if self.next_ear <= 0:
             self.ear = 0.25
-            self.next_ear = random.uniform(4, 14)
+            self.next_ear = random.uniform(4, 14) * (2 if resting else 1)
 
         self.tail -= dt
         self.next_tail -= dt
         if self.next_tail <= 0:
             self.tail = 0.5
-            self.next_tail = random.uniform(9, 25)
+            self.next_tail = random.uniform(9, 25) * (2 if resting else 1)
 
         # He only puts his head down when he's settled, parked and quiet --
         # never mid-sentence, and never while walking somewhere.
@@ -1292,7 +1334,7 @@ class Pet:
                 self.graze_for = 0.0
                 self.pose = "stand"
         elif (self.mode == "home" and not self.text and self.pause <= 0
-              and not self.still):
+              and not self.still and not resting):
             self.next_graze -= dt
             if self.next_graze <= 0:
                 self.pose = "graze"
@@ -1387,6 +1429,8 @@ class Pet:
             why = ""
             if self.pose == "graze":
                 why = " for %.0fs" % self.graze_for
+            elif self.pose == "rest":
+                why = " (snoozed)" if self.snoozing(now) else " (away)"
             elif self.text:
                 why = " (speaking)"
             elif self.mode != "home":
@@ -2121,7 +2165,8 @@ def build_app(opts, tips):
             self.pet.say("Yoru",
                          "I know the Omarchy manual. Right click for a tip, "
                          "left click one to say you already know it and retire "
-                         "it, middle click to snooze, drag to move me.",
+                         "it, middle click (three fingers on a trackpad) to "
+                         "snooze, drag to move me.",
                          14.0, now)
             state = read_state()
             state["introduced"] = True

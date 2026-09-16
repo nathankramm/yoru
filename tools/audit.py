@@ -23,8 +23,8 @@ ck("2 verification", "HYPR_TOPICS" in src and "--verify-report" in src)
 # which tells you nothing. What matters is that all three sets are populated.
 ck("3 voice", len(m.CHATTER) >= 30 and len(m.LATE) >= 4 and len(m.POKES) >= 5,
    "%d chatter, %d late, %d pokes" % (len(m.CHATTER), len(m.LATE), len(m.POKES)))
-ck("4 motion", hasattr(m, "GRAZE_SHIFT") and hasattr(m, "BOUND")
-   and hasattr(m.Pet, "bounding"))
+ck("4 motion", hasattr(m, "GRAZE_SHIFT") and hasattr(m, "REST_SHIFT")
+   and hasattr(m, "BOUND") and hasattr(m.Pet, "bounding"))
 ck("5 atomic writes", "os.replace" in src)
 ck("6 debug flag", "--debug" in src)
 ck("7 topics intact", len({t[0] for t in m.KNOWLEDGE}) >= 27,
@@ -156,7 +156,7 @@ long_lines = [(len(x), x[:50]) for x in [t[3] for t in m.KNOWLEDGE] + m.CHATTER 
               if len(x) > 93]
 ck("28 nothing over 93 characters", not long_lines,
    "longest %d" % longest[0] if not long_lines else long_lines)
-oob = [(pose, b, f) for pose in ("stand", "graze") for b in (False, True)
+oob = [(pose, b, f) for pose in ("stand", "graze", "rest") for b in (False, True)
        for f in range(4) for e in (0, 1) for tl in (0, 1)
        if (lambda q: min(z[0] for z in q) < -3 or max(z[0] for z in q) > 27
            or min(z[1] for z in q) < -4 or max(z[1] for z in q) > 25)(
@@ -330,6 +330,77 @@ ctx = m.GLib.MainContext.default(); end = time.monotonic() + 0.4
 while time.monotonic() < end: ctx.iteration(False); time.sleep(0.01)
 ck("36 hidden does no work", "tick" in started and after_stop == {} and ticks["n"] == 0,
    "sources while shown %s; after stop %s; callbacks in 0.4s hidden: %d" % (sorted(started), after_stop, ticks["n"]))
+# Snooze must show. Through the real middle-click handler on the app above:
+# he answers standing, lies down once the line has cleared, and the render
+# key moves on the change so the frame is actually drawn; the second click
+# stands him up and he stays up while someone is there. Hidden he is never
+# stepped, so the pose he is in when hidden is the pose he is shown in.
+def run_pet(q, secs, start, dt=.033):
+    now = start
+    for _ in range(int(secs / dt)):
+        now += dt; q.step(dt, now, 1920, 1080)
+    return now
+mid = types.SimpleNamespace(get_current_button=lambda: 2)
+q = app.pet; q.seen = set(); q.present_until = 1e9; q.next_talk = q.next_roam = q.next_graze = 1e9
+m.visible = True
+base = m.GLib.get_monotonic_time() / 1e6          # on_click reads the real clock, so
+t = run_pet(q, 2, base); k0 = q.render_key()      # the simulated one starts there too
+app.on_click(mid, 1, 0, 0); snoozed = q.snoozing(t)
+q.step(.033, t + .033, 1920, 1080); said_standing = q.pose == "stand" and bool(q.text)
+t = run_pet(q, 4, t); lay = q.pose == "rest" and not q.text; k1 = q.render_key()
+t = run_pet(q, 60, t); stayed = q.pose == "rest"
+app.on_click(mid, 1, 0, 0); woke = not q.snoozing(t)
+q.step(.033, t + .033, 1920, 1080); up = q.pose == "stand"; k2 = q.render_key()
+t = run_pet(q, 60, t); stayed_up = q.pose == "stand"
+ck("43 middle click lies him down; again stands him up", snoozed and said_standing and lay and stayed
+   and woke and up and stayed_up and k0 != k1 and k1 != k2 and k0[4] != k1[4],
+   "click -> snoozed %s, answers standing %s, lying after the line %s, still lying at 60s %s; "
+   "click -> awake %s, stands %s, still standing at 60s %s; key moved %s" % (
+       snoozed, said_standing, lay, stayed, woke, up, stayed_up, k0 != k1 and k1 != k2))
+# Being away shows the same way: parked and quiet, he lies down when presence
+# lapses -- not before -- and the first sign of activity stands him up on the
+# next frame. --still gets the pose too: it is not movement.
+def away_pet(**kw):
+    q = fresh_pet(**kw); q.next_talk = q.next_roam = q.next_graze = 1e9
+    q.saw_activity(0.0); q.step(.033, 0.0, 1920, 1080); return q
+q = away_pet(); t = run_pet(q, 290, 0.0); early = q.pose
+t = run_pet(q, 20, t); lapsed = q.pose; k_away = q.render_key()
+q.saw_activity(t); q.step(.033, t + .033, 1920, 1080); back = q.pose; k_back = q.render_key()
+s = away_pet(still=True); t = run_pet(s, 310, 0.0); still_rests = s.pose
+s.saw_activity(t); s.step(.033, t + .033, 1920, 1080); still_up = s.pose
+ck("44 away lies him down; activity stands him up", early == "stand" and lapsed == "rest" and back == "stand"
+   and k_away != k_back and still_rests == "rest" and still_up == "stand",
+   "at 290s %s, at 310s %s, one frame after activity %s; --still: %s then %s" % (
+       early, lapsed, back, still_rests, still_up))
+# Two hours snoozed with someone present and everything else running: he is
+# lying down most of the time, never while speaking or walking, gets up before
+# each walk and lies back down after, and while lying he blinks and twitches.
+# Right-click tips still arrive snoozed, so speech happens in this run too.
+random.seed(3); q = fresh_pet(); q.snooze_until = 1e9; q.present_until = 1e9
+q.step(.033, 0.0, 1920, 1080); now = 0.0
+c = collections.Counter(); bad = collections.Counter(); blinks = ears = tails = walks = 0; was_b = was_e = was_t = False
+for i in range(int(7200 / .033)):
+    now += .033
+    if i % int(600 / .033) == 0:
+        head, text = q.next_ambient(why="asked"); q.say(head, text, 9.0, now)
+    b = q.text; mode = q.mode; q.step(.033, now, 1920, 1080)
+    c[q.pose] += 1
+    if q.pose == "rest" and q.text: bad["speaking"] += 1
+    if q.pose == "rest" and q.mode != "home": bad["walking"] += 1
+    if q.pose == "graze": bad["grazing"] += 1
+    if mode == "home" and q.mode == "out":
+        walks += 1
+        if q.pose == "rest": bad["walked lying"] += 1
+    if q.pose == "rest":
+        if q.blink > 0 and not was_b: blinks += 1
+        if q.ear > 0 and not was_e: ears += 1
+        if q.tail > 0 and not was_t: tails += 1
+    was_b, was_e, was_t = q.blink > 0, q.ear > 0, q.tail > 0
+share = c["rest"] / sum(c.values())
+ck("45 snoozed: lies 80%+, never speaking or walking, blinks lying down",
+   share > 0.80 and not bad and walks > 0 and blinks > 200 and ears > 20 and tails > 10,
+   "2h: lying %.0f%%; %s; %d walks; lying: %d blinks, %d ear, %d tail" % (
+       100 * share, dict(bad) or "no rest while speaking/walking, no graze", walks, blinks, ears, tails))
 # Cadence. Two speeds and a decay, all from tools/exhaust.py. A fresh user at
 # the default has every fundamental inside roughly a hundred minutes of
 # presence (300 s, ~21 utterances at 15% chatter); after that the gap between

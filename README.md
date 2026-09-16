@@ -238,7 +238,7 @@ o.bind("SUPER + CTRL + Y", "Toggle Yoru", "pkill -USR1 -f 'python3 /home/you/.lo
 | **Right click** | A tip, now |
 | **Left click a tip** | "I know this." Retired permanently |
 | **Left click otherwise** | He says something |
-| **Middle click** | Snooze one hour. Again to wake him |
+| **Middle click** | Snooze one hour. He lies down; again to wake him. On a trackpad, three fingers — a tap or a press, both work out of the box |
 | **Drag** | Move him. The spot is remembered across reboots |
 | **Super + Ctrl + Y** | Hide him entirely. Again to bring him back |
 
@@ -305,6 +305,13 @@ something to say. Left alone he drops his head and grazes, and his ears and
 tail twitch the way a standing deer's do. Most of his walks are a trot; about
 one in five, he spooks himself and bounds instead, tail flagged. None of it
 does anything. It's just him.
+
+Snoozed, or once you've been away long enough to count as gone, he lies down:
+legs folded under, head up, still blinking. He gets up when the hour is over
+or you come back, and before he says or does anything else. That pose is the
+only visible sign of either state — without it, the one way to check a
+middle click had taken was to middle click again, which undid it. `--still`
+keeps the pose; it's not movement.
 
 He lives on one monitor. A layer surface belongs to a single output, and the
 compositor puts him on whichever one has keyboard focus when he starts;

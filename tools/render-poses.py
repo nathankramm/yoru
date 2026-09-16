@@ -40,6 +40,7 @@ CELLS = [
     ("rest", dict(frame=1, blink=False, pose="rest"), False),
     ("rest, blink", dict(frame=1, blink=True, pose="rest"), False),
     ("rest, chew", dict(frame=1, blink=False, pose="rest", chew=1), False),
+    ("rest, dozing", dict(frame=1, blink=False, pose="rest", doze=1), False),
     ("rest, ear + tail", dict(frame=1, blink=False, pose="rest", ear=1, tail=1), False),
     ("rest, facing left", dict(frame=1, blink=False, pose="rest"), True),
 ]

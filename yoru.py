@@ -362,6 +362,16 @@ SETTLE_SECS = 0.15
 CHEW_PERIOD = 0.75
 CHEW_BOUT = (36, 44)
 CHEW_PAUSE = (5, 10)
+# Dozing. Bedded deer sleep far less than they lie down (Woods), and when
+# they do it is brief: "30 seconds to a few minutes of dozing, followed by
+# a brief alert period, and then more dozing" (Adams, NDA). The pose does
+# not change -- the head stays up -- only the eye: shut, it is a pixel of
+# shade where the accent was, an eye that isn't lit. He beds alert first,
+# and cud is a waking activity, so eye open and chewing is alert, eye
+# closed and still is dozing. The ears never stop either way.
+DOZE_FIRST = (30, 120)
+DOZE_FOR = (30, 180)
+DOZE_ALERT = (15, 60)
 
 
 def _folded_legs(out):
@@ -374,7 +384,7 @@ def _folded_legs(out):
 REST_HOOF = _rest_hoof()
 
 
-def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False, chew=0):
+def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False, chew=0, doze=0):
     out = []
     gait = BOUND if bound else GAIT
     near, far = gait[frame], gait[(frame + 2) % 4]
@@ -397,7 +407,9 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False, chew=0):
         for x, ch in enumerate(row):
             if ch == ".":
                 continue
-            col = PAL["b"] if (ch == "e" and blink) else PAL[ch]
+            col = PAL[ch]
+            if ch == "e":
+                col = FAR if doze else PAL["b"] if blink else col
             dx, dy = 0, 0
             if grazing and y <= 11:
                 dx, dy = GRAZE_SHIFT
@@ -1153,6 +1165,10 @@ class Pet:
         self.chew = False
         self.next_chew = 0.0
         self.chews_left = 0
+        # Dozing: eye shut or not, and time to the next change.
+        self.doze = False
+        self.next_doze = 0.0
+        self.was_resting = False
         self.ear = 0.0
         self.next_ear = random.uniform(4, 12)
         self.tail = 0.0
@@ -1172,6 +1188,7 @@ class Pet:
         self.text_until = 0.0
         # Last values --debug reported, so it only speaks on a change.
         self._last_pose = self.pose
+        self._last_doze = False
         self._was_present = self.present(0.0)
 
     # -- placement ---------------------------------------------------------
@@ -1393,6 +1410,20 @@ class Pet:
             self.rouse = False
         resting = self.pose == "rest"
 
+        # The doze cycle runs only while he is bedded; anywhere else the
+        # eye is open. He lies down alert, then dozes and wakes by turns.
+        if resting:
+            if not self.was_resting:
+                self.doze = False
+                self.next_doze = random.uniform(*DOZE_FIRST)
+            self.next_doze -= dt
+            if self.next_doze <= 0:
+                self.doze = not self.doze
+                self.next_doze = random.uniform(*(DOZE_FOR if self.doze else DOZE_ALERT))
+        else:
+            self.doze = False
+        self.was_resting = resting
+
         # A motionless deer reads as crashed; a blinking one reads as
         # asleep. So the blink never stops, and lying down it slows: the
         # lids stay shut longer and the tail goes half as often. The ear
@@ -1401,7 +1432,8 @@ class Pet:
         self.blink -= dt
         self.next_blink -= dt
         if self.next_blink <= 0:
-            self.blink = 0.25 if resting else 0.11
+            if not self.doze:                  # shut already; nothing to blink
+                self.blink = 0.25 if resting else 0.11
             self.next_blink = random.uniform(2.5, 7.5)
 
         self.ear -= dt
@@ -1410,9 +1442,13 @@ class Pet:
             self.ear = 0.25
             self.next_ear = random.uniform(3, 11) if resting else random.uniform(4, 14)
 
-        # Cud, only lying down. The rhythm is regular inside a bout and
-        # the bouts are not, so he never looks like a metronome.
-        if resting:
+        # Cud, only lying down and only awake: it pauses while the eye is
+        # shut and picks the bout back up when it opens. The rhythm is
+        # regular inside a bout and the bouts are not, so he never looks
+        # like a metronome.
+        if resting and self.doze:
+            self.chew = False
+        elif resting:
             self.next_chew -= dt
             if self.next_chew <= 0:
                 if self.chews_left > 0:
@@ -1546,6 +1582,9 @@ class Pet:
             self._was_present = here
             debug("presence: %s", "here" if here
                   else "away (%.0fs without activity)" % self.idle_after)
+        if self.doze != self._last_doze:
+            self._last_doze = self.doze
+            debug("doze: %s", "eye shut" if self.doze else "eye open")
         if self.pose != self._last_pose:
             why = ""
             if self.pose == "graze":
@@ -1570,7 +1609,7 @@ class Pet:
         and between a blink, an ear and a tail, most frames haven't."""
         return (int(self.x), int(self.y), self.dir, self.frame(), self.pose,
                 self.blink > 0, self.ear > 0, self.tail > 0, self.bounding(),
-                self.chew,
+                self.chew, self.doze,
                 self.head, self.text)
 
     def frame(self):
@@ -1937,7 +1976,7 @@ def draw_sprite(cr, pet, oy):
     px, flip = pet.px, pet.dir < 0
     pts = pixels(pet.frame(), pet.blink > 0, pet.pose,
                  1 if pet.ear > 0 else 0, 1 if pet.tail > 0 else 0,
-                 pet.bounding(), pet.chew)
+                 pet.bounding(), pet.chew, pet.doze)
 
     def sx(x):
         return pet.x + ((SW - 1 - x) if flip else x) * px

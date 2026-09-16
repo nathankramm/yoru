@@ -103,7 +103,7 @@ m._load_gtk(); import cairo
 d = os.path.join(os.environ["HOME"], ".local/state/omarchy/current/theme")
 os.makedirs(d, exist_ok=True); m.THEME_COLORS = os.path.join(d, "colors.toml")
 def lum(x): return 0.2126 * x[0] + 0.7152 * x[1] + 0.0722 * x[2]
-bad = []; hoof = []
+bad = []; hoof = []; shut_eye = []
 themes = sorted(glob.glob("/usr/share/omarchy/themes/*/colors.toml"))
 for f in themes:
     shutil.copy(f, m.THEME_COLORS); m.apply_theme()
@@ -115,12 +115,16 @@ for f in themes:
     # the tone not picked would have given.
     other = m.HOOF if m.REST_HOOF == m.FAR_HOOF else m.FAR_HOOF
     hoof.append((abs(lum(m.REST_HOOF) - lum(m.FAR)), abs(lum(other) - lum(m.FAR)), f.split("/")[-2]))
+    # ...and the shut eye, a pixel of the same shade in the coat, off the coat
+    if abs(lum(m.FAR) - lum(m.PAL["b"])) < 0.10: shut_eye.append(f.split("/")[-2])
 ck("23 every shipped theme legible", not bad and len(themes) > 0,
    "%d themes, bad: %s" % (len(themes), bad))
 thin = [(n, round(g, 3)) for g, _, n in hoof if g < 0.12]
-ck("48 resting hooves stand off the shade in every theme", not thin and len(hoof) > 0,
-   "%d themes, tightest %s at %.3f (other tone would give %.3f); under 0.12: %s" % (
-       (len(hoof),) + (min(hoof)[2], min(hoof)[0], min(hoof)[1], thin or "none") if hoof else (0, "-", 0, 0, "no themes")))
+ck("48 resting hooves stand off the shade, and the shut eye off the coat, in every theme",
+   not thin and not shut_eye and len(hoof) > 0,
+   "%d themes, tightest %s at %.3f (other tone would give %.3f); under 0.12: %s; shut eye under 0.10: %s" % (
+       (len(hoof),) + (min(hoof)[2], min(hoof)[0], min(hoof)[1], thin or "none", shut_eye or "none")
+       if hoof else (0, "-", 0, 0, "no themes", "-")))
 os.remove(m.THEME_COLORS)
 # No source at all: no resolver on PATH, no colors.toml. The built-in palette
 # must stand untouched. PAL is mutated in place, so restore it first.
@@ -398,7 +402,8 @@ def lie_for_2h(seed, **state):
     random.seed(seed); q = fresh_pet(); q.next_talk = 1e9
     for k, v in state.items(): setattr(q, k, v)
     q.step(.033, 0.0, 1920, 1080); now = 0.0
-    c = collections.Counter(); bad = collections.Counter(); n = dict(blinks=0, ears=0, tails=0, walks=0, chews=0)
+    c = collections.Counter(); bad = collections.Counter()
+    n = dict(blinks=0, ears=0, tails=0, walks=0, chews=0, dozing=0, ears_dozing=0)
     was = dict(b=False, e=False, t=False, c=False)
     for i in range(int(7200 / .033)):
         now += .033
@@ -411,6 +416,11 @@ def lie_for_2h(seed, **state):
         if q.pose == "rest" and q.mode != "home": bad["walking"] += 1
         if q.pose == "graze": bad["grazing"] += 1
         if q.chew and q.pose != "rest": bad["chewing up"] += 1
+        if q.doze and q.pose != "rest": bad["eye shut up"] += 1
+        if q.doze and q.chew: bad["chewing asleep"] += 1
+        if q.doze and q.blink > 0 and not was["b"]: bad["blinking asleep"] += 1
+        if q.doze: n["dozing"] += 1
+        if q.doze and q.ear > 0 and not was["e"]: n["ears_dozing"] += 1
         if mode == "home" and q.mode == "out":
             n["walks"] += 1
             if q.pose == "rest": bad["walked lying"] += 1
@@ -420,16 +430,18 @@ def lie_for_2h(seed, **state):
             if q.tail > 0 and not was["t"]: n["tails"] += 1
             if q.chew and not was["c"]: n["chews"] += 1
         was = dict(b=q.blink > 0, e=q.ear > 0, t=q.tail > 0, c=q.chew)
+    n["dozing"] = n["dozing"] / max(1, c["rest"])
     return c["rest"] / sum(c.values()), c["settle"], bad, n
 share, settles, bad, n = lie_for_2h(3, snooze_until=1e9, present_until=1e9)
-ck("45 snoozed 2h: lies 80%+, no walk, never speaking, blinks, ear moves, chews, never snaps",
-   share > 0.80 and not bad and n["walks"] == 0 and n["blinks"] > 200 and n["ears"] > 200
-   and n["tails"] > 10 and n["chews"] > 1000 and settles > 0,
-   "lying %.0f%%, %d settle frames; %s; %d walks; lying: %d blinks, %d ear, %d tail, %d chews" % (
-       100 * share, settles, dict(bad) or "clean", n["walks"], n["blinks"], n["ears"], n["tails"], n["chews"]))
+ck("45 snoozed 2h: lies 80%+, no walk, never speaking, blinks, ear moves, chews, dozes, never snaps",
+   share > 0.80 and not bad and n["walks"] == 0 and n["blinks"] > 100 and n["ears"] > 200
+   and n["tails"] > 10 and n["chews"] > 500 and settles > 0 and 0.3 < n["dozing"] < 0.8 and n["ears_dozing"] > 50,
+   "lying %.0f%%, %d settle frames; %s; %d walks; lying: %d blinks, %d ear, %d tail, %d chews, eye shut %.0f%% (%d ear moves shut)" % (
+       100 * share, settles, dict(bad) or "clean", n["walks"], n["blinks"], n["ears"], n["tails"], n["chews"],
+       100 * n["dozing"], n["ears_dozing"]))
 share, settles, bad, n = lie_for_2h(4, snooze_until=0.0, present_until=0.0)
 ck("46 away 2h: lies 80%+, gets up to walk and lies back down, never snaps",
-   share > 0.80 and not bad and n["walks"] > 0 and n["blinks"] > 200 and n["ears"] > 200 and settles > 0,
+   share > 0.80 and not bad and n["walks"] > 0 and n["blinks"] > 100 and n["ears"] > 200 and settles > 0,
    "lying %.0f%%, %d settle frames; %s; %d walks; lying: %d blinks, %d ear, %d tail, %d chews" % (
        100 * share, settles, dict(bad) or "clean", n["walks"], n["blinks"], n["ears"], n["tails"], n["chews"]))
 # The settle frame: going down and getting up both hold it for about 150ms
@@ -470,6 +482,7 @@ ck("47 settle frame held ~150ms both ways; a word and a walk get up through it",
 # never moves; and every chew changes the render key, or it never draws.
 q = fresh_pet(); q.present_until = 1e9; q.snooze_until = 1e9; q.next_talk = q.next_roam = 1e9
 t = run_pet(q, 2, 0.0); assert q.pose == "rest"
+q.next_doze = 1e9                                    # awake throughout: the cud rhythm alone (50 has the doze)
 chews = []; changes = 0; k = q.render_key(); was = q.chew; gaps = []; last = None
 for i in range(int(600 / .033)):
     t += .033; q.step(.033, t, 1920, 1080)
@@ -489,6 +502,36 @@ ck("49 cud: real chew rate in bouts with pauses, only lying down, every chew dra
    and changes >= 2 * len(chews) - 2 and standing_chews == 0 and q.pose == "stand",
    "10 min lying: %d chews at %.0f/min, %d pauses of %.0f-%.0fs, %d key changes; standing 1 min: %d chews" % (
        len(chews), rate, len(pauses), min(pauses) if pauses else 0, max(pauses) if pauses else 0, changes, standing_chews))
+# The doze cycle, on Adams' numbers: he beds alert, then dozes 30s to a few
+# minutes, wakes briefly, dozes again, for as long as he is down. Eye shut
+# means no cud and no blink; the ear goes on regardless; and off the bed the
+# eye is open on the very frame he starts to rise.
+q = fresh_pet(); q.present_until = 1e9; q.snooze_until = 1e9; q.next_talk = q.next_roam = 1e9
+t = run_pet(q, 2, 0.0); assert q.pose == "rest"
+first_shut = None; bouts = []; alerts = []; start = t; was = q.doze; ear_shut = 0; was_e = False
+chews_shut = blinks_shut = 0; was_b = False
+for i in range(int(3600 / .033)):
+    t += .033; q.step(.033, t, 1920, 1080)
+    if q.doze != was:
+        (bouts if was else alerts).append(t - start); start = t
+        if first_shut is None and q.doze: first_shut = t - 2.0
+    if q.doze:
+        if q.ear > 0 and not was_e: ear_shut += 1
+        if q.chew: chews_shut += 1
+        if q.blink > 0 and not was_b: blinks_shut += 1
+    was, was_e, was_b = q.doze, q.ear > 0, q.blink > 0
+alerts = alerts[1:]                                   # the first "alert" is the bedding-down one
+q.snooze_until = 0.0; t = run_pet(q, 0.034, t); rises_open = q.pose == "settle" and not q.doze
+shut_share = sum(bouts) / 3600
+ck("50 doze cycle: beds alert, dozes 30s-3min, wakes 15-60s, no cud or blink shut, ear moves, eye opens as he rises",
+   first_shut is not None and 25 <= first_shut <= 125 and len(bouts) >= 8
+   and all(29 <= b <= 181 for b in bouts) and all(14 <= a <= 61 for a in alerts)
+   and chews_shut == 0 and blinks_shut == 0 and ear_shut > 20 and rises_open and 0.3 < shut_share < 0.85,
+   "first shut after %ss; %d dozes of %.0f-%.0fs, %d alerts of %.0f-%.0fs, eye shut %.0f%% of the hour; "
+   "shut: %d chews, %d blinks, %d ear moves; rising: eye %s" % (
+       "%.0f" % first_shut if first_shut is not None else "never", len(bouts), min(bouts) if bouts else 0,
+       max(bouts) if bouts else 0, len(alerts), min(alerts) if alerts else 0, max(alerts) if alerts else 0,
+       100 * shut_share, chews_shut, blinks_shut, ear_shut, "open" if rises_open else "SHUT"))
 # Cadence. Two speeds and a decay, all from tools/exhaust.py. A fresh user at
 # the default has every fundamental inside roughly a hundred minutes of
 # presence (300 s, ~21 utterances at 15% chatter); after that the gap between

@@ -354,8 +354,8 @@ SETTLE_SECS = 0.15
 
 # Cud. A bedded deer chews, and it is the motion that keeps the pose from
 # reading as a frozen frame. The lower jaw is one row of the head; a chew
-# slides it one pixel forward, so the throat pixel goes and a chin pixel
-# comes -- lateral, the way a ruminant's jaw moves, never the mouth
+# puts one pixel of chin ahead of it, under the muzzle, and moves nothing
+# else -- lateral, the way a ruminant's jaw moves, never the mouth
 # opening, which would read as speech. A whitetail chews a bolus 40-55
 # times at 78-93 a minute, then swallows and brings up the next: so, a
 # bout of about forty chews at a real rate, a pause, again.
@@ -415,8 +415,13 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False, chew=0, doze=
                 dx, dy = GRAZE_SHIFT
             elif resting:
                 dx, dy = REST_HEAD if y <= 11 else REST_SHIFT
-                if chew and y == 9:
-                    dx += 1                    # the jaw slides forward
+                if chew and y == 9 and x == 20:
+                    # The chin, one pixel ahead of the jaw's front end.
+                    # Added, not slid: sliding the row also took its rear
+                    # pixel, which on the pulled-back head is the throat
+                    # at the head/neck junction, and the neck twitched
+                    # once a second.
+                    out.append((x + dx + 1, y + bob + dy, col))
             elif settling:
                 dx, dy = SETTLE_HEAD if y <= 11 else SETTLE_SHIFT
             # The head is still lying down; the ear is not. A bedded deer's

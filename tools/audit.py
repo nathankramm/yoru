@@ -170,19 +170,21 @@ long_lines = [(len(x), x[:50]) for x in [t[3] for t in m.KNOWLEDGE] + m.CHATTER 
               if len(x) > 93]
 ck("28 nothing over 93 characters", not long_lines,
    "longest %d" % longest[0] if not long_lines else long_lines)
-oob = [(pose, b, f) for pose in ("stand", "graze", "rest", "settle") for b in (False, True)
-       for f in range(4) for e in (0, 1) for tl in (0, 1)
+GAITS = (None, "walk", "trot", "bound")
+oob = [(pose, g, f) for pose in ("stand", "graze", "rest", "settle") for g in GAITS
+       for f in range(4) for e in (0, 1) for tl in (0, 1, 2)
        if (lambda q: min(z[0] for z in q) < -3 or max(z[0] for z in q) > 27
            or min(z[1] for z in q) < -4 or max(z[1] for z in q) > 25)(
-           m.pixels(f, False, pose, e, tl, b))]
+           m.pixels(f, False, pose, e, tl, g))]
 ck("26 all pose combos in bounds", not oob, oob[:2])
 # A floating pixel is a rendering fault in any pose, and a pixel-diff that
 # only looks at what was removed passes an added one happily. Every pixel of
 # every combination -- pose, gait, frame, blink, ear, tail, chew, doze,
 # parked or moving -- must have an 8-neighbour in the sprite, and the sprite
-# must be one piece. Parked he does not bob; trotting, the body rises a row
-# on frames 1 and 3 and the legs lengthen to meet it; bounding, the legs
-# lift with the body. So every frame is one piece. It was five, parked and
+# must be one piece. Parked he does not bob; walking he is level with one
+# foot in the air, knee bent; trotting, the body rises a row on frames 1 and
+# 3 and the legs lengthen to meet it; bounding, the legs lift with the body.
+# So every frame is one piece. It was five, parked and
 # on the trot's pass frames, from the first commit until the bob stopped
 # applying to a standing animal.
 def neighbours(p, pts):
@@ -199,26 +201,58 @@ def components(pts):
     return n
 lonely = []; pieces = collections.Counter(); combos = 0
 for pose in ("stand", "graze", "rest", "settle"):
-    for b in (False, True):
+    for g in GAITS:
         for f in range(4):
             for e in (0, 1):
-                for tl in (0, 1):
+                for tl in (0, 1, 2):
                     for chew in (0, 1):
                         for doze in (0, 1):
                             for blink in (False, True):
-                                for moving in (False, True):
-                                    combos += 1
-                                    pts = {(x, y) for x, y, _ in m.pixels(f, blink, pose, e, tl, b, chew, doze, moving)}
-                                    lonely += [(pose, f, p) for p in pts if not neighbours(p, pts)]
-                                    pieces[(pose, "moving" if moving else "parked", f, components(pts))] += 1
-multi = sorted({(pose, mv, f, n) for (pose, mv, f, n), _ in pieces.items() if n > 1})
+                                combos += 1
+                                pts = {(x, y) for x, y, _ in m.pixels(f, blink, pose, e, tl, g, chew, doze)}
+                                lonely += [(pose, g, f, p) for p in pts if not neighbours(p, pts)]
+                                pieces[(pose, g or "parked", f, components(pts))] += 1
+multi = sorted({(pose, g, f, n) for (pose, g, f, n), _ in pieces.items() if n > 1})
 # parked he must not bob at all: the body (rows 0-17) sits where frame 0's
-# does on every frame, and only when moving does it rise on frames 1 and 3
-body = lambda f, mv: sorted(p for p in m.pixels(f, False, "stand", moving=mv) if p[1] <= 17)
-still = all(body(f, False) == body(0, False) for f in range(4)) and body(1, True) != body(0, True)
-ck("51 every frame one piece, no floating pixel, no bob while parked", not lonely and not multi and still,
-   "%d combinations, floating: %s; more than one piece: %s; parked body never moves, trotting body does: %s" % (
-       combos, lonely[:3] or "none", ", ".join("%s %s frame %d -> %d" % x for x in multi) or "none", still))
+# does on every frame; trotting it rises on frames 1 and 3; walking it is
+# level and only the skull nods
+body = lambda f, g, top=17: sorted(p for p in m.pixels(f, False, "stand", gait=g) if p[1] <= top)
+still = all(body(f, None) == body(0, None) for f in range(4)) and body(1, "trot") != body(0, "trot")
+torso = lambda f, g: sorted(p for p in m.pixels(f, False, "stand", gait=g) if 12 <= p[1] <= 17)
+level = all(torso(f, "walk") == torso(0, None) for f in range(4))
+ck("51 every frame one piece, no floating pixel, no bob while parked, walk level", not lonely and not multi and still and level,
+   "%d combinations, floating: %s; more than one piece: %s; parked body still and trotting body rises: %s; walking torso level: %s" % (
+       combos, lonely[:3] or "none", ", ".join("%s %s frame %d -> %d" % x for x in multi) or "none", still, level))
+# The walk is four-beat: in every frame exactly one hoof is off the ground,
+# each leg takes its turn, and the order is the lateral sequence -- near
+# hind, near fore, far hind, far fore. The trot is two-beat: all four hooves
+# on the ground with diagonal pairs in phase. The roam is a walk, the bolt
+# a bound; the flag flies only in the bound and the wag never does.
+def hooves(f, g):
+    pts = m.pixels(f, False, "stand", gait=g)
+    return sorted((x, y) for x, y, c in pts if c in (m.HOOF, m.FAR_HOOF))
+lifted = [[p for p in hooves(f, "walk") if p[1] == 22] for f in range(4)]
+one_up = all(len(l) == 2 and len(hooves(f, "walk")) == 8 for f, l in enumerate(lifted))
+# which leg: the near hind is drawn at x 3-4 (+d2), near fore 13-14, far hind 6-7, far fore 10-11
+def which(l):
+    x = l[0][0]
+    return "nr" if x <= 5 else "fr" if x <= 8 else "ff" if x <= 12 else "nf"
+order = [which(l) for l in lifted if l]
+trot_down = all(all(p[1] == 23 for p in hooves(f, "trot")) for f in range(4))
+q = m.Pet(O, m.KNOWLEDGE); q.seen = set(); q.present_until = 1e9; q.next_talk = q.next_graze = 1e9
+q.step(.033, 0.0, 1920, 1080)
+gaits = collections.Counter(); flags = collections.Counter(); wags = collections.Counter(); t = 0.0
+random.seed(5)
+for i in range(int(3600 / .033)):
+    t += .033; q.step(.033, t, 1920, 1080)
+    g = q.gait(); gaits[g] += 1
+    if q.tail_frame() == 2: flags[g] += 1
+    if q.tail_frame() == 1: wags[g] += 1
+ck("52 the roam is a four-beat walk; the flag flies in the bound only; the wag never does",
+   one_up and order == ["nr", "nf", "fr", "ff"] and trot_down and gaits["walk"] > 0 and gaits["bound"] > 0
+   and gaits["trot"] == 0 and set(flags) <= {"bound"} and flags["bound"] > 0 and "bound" not in wags and wags[None] > 0,
+   "walk: one hoof up per frame %s, order %s; trot: all down %s; 1h: %d walk frames, %d bound, %d trot; flag in %s; wag in %s" % (
+       one_up, order, trot_down, gaits["walk"], gaits["bound"], gaits["trot"], dict(flags), dict(wags)))
 # Tips generated from the user's own bindings.lua replace the curated tip for
 # a key the user rebound and add the rest. Afterwards no key may be covered
 # twice and every id must be unique. Run against the real file when there is

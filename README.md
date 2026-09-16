@@ -301,10 +301,14 @@ model these numbers came from.
 ## The deer
 
 He parks facing away from your screen and turns to you only when he has
-something to say. Left alone he drops his head and grazes, and his ears and
-tail twitch the way a standing deer's do. Most of his walks are a trot; about
-one in five, he spooks himself and bounds instead, tail flagged. None of it
-does anything. It's just him.
+something to say. Left alone he drops his head and grazes, his ears twitch,
+and now and then his tail gives the casual side-to-side wag that is a deer's
+all-clear. His walks are a four-beat walk — one foot in the air at a time,
+three on the ground, a slight nod of the head — because at half a body length
+a second that is what a mammal does; about one in five, he spooks himself and
+bounds instead, and only then does the tail go up, because the flag means
+danger is here and a deer standing calmly doesn't say that. None of it does
+anything. It's just him.
 
 Snoozed, or once you've been away long enough to count as gone, he lies down:
 legs folded under, head pulled back. He blinks, his ears keep going the way a

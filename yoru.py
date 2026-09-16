@@ -290,7 +290,32 @@ def theme_stamp():
             return None
 
 
-GAIT = [
+# Three gaits, and which one is a matter of speed, the same across mammals:
+# a four-beat walk when slow, a two-beat trot at intermediate speeds, a
+# gallop -- for a deer, a bound -- when fast. He ambles at about half a
+# body length a second, which is a walk.
+#
+# The walk: each foot lands on its own, in lateral sequence -- near hind,
+# near fore, far hind, far fore -- a quarter of the stride apart, and three
+# feet are on the ground at almost any moment. One leg per frame is in the
+# air here, knee bent, coming forward; the other three are planted: just
+# landed at reach, under, and pushing off. No bob; a walk is level. The
+# head nods once per foreleg, twice a stride, as a walking quadruped's does.
+WALK = [
+    dict(d1=0, d2=1, up=1),      # swinging: lifted, coming forward
+    dict(d1=1, d2=2, up=0),      # reaching, just landed
+    dict(d1=0, d2=0, up=0),      # under
+    dict(d1=-1, d2=-2, up=0),    # pushing off
+]
+WALK_PHASE = dict(nr=0, nf=1, fr=2, ff=3)
+WALK_NOD = [0, 1, 0, 1]
+# The wag: two swings, the tip on the flank for a beat and off for a beat.
+WAG_SECS = 0.6
+WAG_BEAT = 0.15
+# The trot: two-beat, diagonal pairs in phase -- near hind with far fore --
+# and the body rises a row on the pass, the legs lengthening to meet it.
+# Not used for the roam now; kept for a faster amble.
+TROT = [
     dict(r1=0, r2=-1, f1=1, f2=2),
     dict(r1=0, r2=0, f1=0, f2=0),
     dict(r1=0, r2=1, f1=0, f2=-2),
@@ -299,14 +324,15 @@ GAIT = [
 BOB = [0, -1, 0, -1]
 
 
-def _leg(out, ax, d1, d2, col, hoof, lift=0, top=18, floor=None):
+def _leg(out, ax, d1, d2, col, hoof, lift=0, top=18, floor=None, up=0):
     """Upper leg from `top` to row 20, lower leg 21-22, hoof 23, all plus
     `lift`. When the trot bobs the body up a row the upper leg starts a
     row higher to meet it -- the legs straighten under the animal, the
     hooves stay on the ground -- or row 17 empties and the halo fills it
-    as a seam. A body that has come down over the legs (`floor`) hides
-    their tops; drawing them anyway puts four coat-coloured stripes
-    through the belly."""
+    as a seam. `up` is a foot in the air: the lower leg and hoof rise
+    that many rows, the upper stays, so the knee bends. A body that has
+    come down over the legs (`floor`) hides their tops; drawing them
+    anyway puts four coat-coloured stripes through the belly."""
     for y in range(top, 21):
         for i in range(2):
             if floor is None or y > floor:
@@ -314,9 +340,9 @@ def _leg(out, ax, d1, d2, col, hoof, lift=0, top=18, floor=None):
     for y in range(21, 23):
         for i in range(2):
             if floor is None or y > floor:
-                out.append((ax + d2 + i, y + lift, col))
+                out.append((ax + d2 + i, y + lift - up, col))
     for i in range(2):
-        out.append((ax + d2 + i, 23 + lift, hoof))
+        out.append((ax + d2 + i, 23 + lift - up, hoof))
 # A bound is not a faster trot. The legs pair up front and back and the whole
 # body leaves the ground, which is why a startled deer reads as a deer.
 BOUND = [
@@ -397,29 +423,43 @@ def _folded_legs(out):
 REST_HOOF = _rest_hoof()
 
 
-def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False, chew=0, doze=0,
-           moving=False):
+def pixels(frame, blink, pose="stand", ear=0, tail=0, gait=None, chew=0, doze=0):
+    """One frame. `gait` is None parked, else "walk", "trot" or "bound".
+    `tail` is 1 for the wag, 2 for the flag."""
     out = []
-    gait = BOUND if bound else GAIT
-    near, far = gait[frame], gait[(frame + 2) % 4]
     grazing, resting = pose == "graze", pose == "rest"
     settling = pose == "settle"
+    bound, walking = gait == "bound", gait == "walk"
+    # Each leg's (d1, d2, up): the walk phases them one by one, the trot
+    # and bound pair them, near against far.
     if settling:
-        near = far = SETTLE_LEGS
+        s = SETTLE_LEGS
+        legs = dict(nr=(s["r1"], s["r2"], 0), nf=(s["f1"], s["f2"], 0),
+                    fr=(s["r1"], s["r2"], 0), ff=(s["f1"], s["f2"], 0))
+    elif walking:
+        legs = {k: (WALK[(frame - p) % 4]["d1"], WALK[(frame - p) % 4]["d2"],
+                    WALK[(frame - p) % 4]["up"]) for k, p in WALK_PHASE.items()}
+    else:
+        table = BOUND if bound else TROT
+        near, far = table[frame], table[(frame + 2) % 4]
+        legs = dict(nr=(near["r1"], near["r2"], 0), nf=(near["f1"], near["f2"], 0),
+                    fr=(far["r1"], far["r2"], 0), ff=(far["f1"], far["f2"], 0))
     # A bob is a gait thing. Parked, there is none: he is frame 1 all day,
     # and a body a row off its legs was a seam for as long as he stood
-    # there. Trotting, the body rises on the pass and the legs lengthen
-    # to meet it. In a bound the whole animal leaves the ground, so the
-    # legs rise with the body; lifting the body alone just severs them.
-    # Lying down there is nothing to bob either way.
-    lift = near.get("lift", 0) if bound else 0
-    bob = 0 if resting or settling or not moving else (0 if bound else BOB[frame]) + lift
+    # there. Walking he is level; the head nods instead. Trotting, the
+    # body rises on the pass and the legs lengthen to meet it. In a bound
+    # the whole animal leaves the ground, so the legs rise with the body;
+    # lifting the body alone just severs them. Lying down there is
+    # nothing to bob either way.
+    lift = BOUND[frame]["lift"] if bound and not (resting or settling) else 0
+    bob = 0 if resting or settling else BOB[frame] if gait == "trot" else lift
+    nod = WALK_NOD[frame] if walking and pose == "stand" else 0
     top = 18 + (0 if bound else bob)
     floor = 17 + SETTLE_SHIFT[1] if settling else None
 
     if not resting:
-        _leg(out, 6, far["r1"], far["r2"], FAR, FAR_HOOF, lift, top, floor)
-        _leg(out, 10, far["f1"], far["f2"], FAR, FAR_HOOF, lift, top, floor)
+        _leg(out, 6, *legs["fr"][:2], FAR, FAR_HOOF, lift, top, floor, legs["fr"][2])
+        _leg(out, 10, *legs["ff"][:2], FAR, FAR_HOOF, lift, top, floor, legs["ff"][2])
 
     for y, row in enumerate(BODY):
         for x, ch in enumerate(row):
@@ -442,25 +482,34 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False, chew=0, doze=
                     out.append((x + dx + 1, y + bob + dy, col))
             elif settling:
                 dx, dy = SETTLE_HEAD if y <= 11 else SETTLE_SHIFT
+            elif nod and y <= 9:
+                dy = nod                       # the walk's head nod: skull only
+            # The wag: the tail swings sideways, and in profile what shows
+            # is the tip crossing onto the flank. Drawn after the rump.
+            if tail == 1 and y == 13 and x == 0:
+                continue
             # The head is still lying down; the ear is not. A bedded deer's
             # ears are never lowered and move constantly.
             if ear and not grazing and y == 6 and x == 14:
                 out.append((x + dx - 1, y + bob + dy - 1, col))   # ear pricks up and back
             out.append((x + dx, y + bob + dy, col))
 
-    # A raised tail is the real signal a deer gives. Add to it, don't move it,
-    # or the rump grows a gap.
-    if tail and not grazing:
-        _, dy = REST_SHIFT if resting else SETTLE_SHIFT if settling else (0, 0)
+    _, tdy = REST_SHIFT if resting else SETTLE_SHIFT if settling else (0, 0)
+    if tail == 1:
+        out.append((2, 13 + bob + tdy, PAL["c"]))
+    # The flag is the alarm signal a deer gives, and the bound is the only
+    # place he gives it. Add to the tail, don't move it, or the rump grows
+    # a gap.
+    elif tail == 2 and not grazing:
         for x in range(2):
-            out.append((x, 10 + bob + dy, PAL["c"]))
-            out.append((x, 11 + bob + dy, PAL["c"]))
+            out.append((x, 10 + bob + tdy, PAL["c"]))
+            out.append((x, 11 + bob + tdy, PAL["c"]))
 
     if resting:
         _folded_legs(out)
     else:
-        _leg(out, 3, near["r1"], near["r2"], PAL["b"], HOOF, lift, top, floor)
-        _leg(out, 13, near["f1"], near["f2"], PAL["b"], HOOF, lift, top, floor)
+        _leg(out, 3, *legs["nr"][:2], PAL["b"], HOOF, lift, top, floor, legs["nr"][2])
+        _leg(out, 13, *legs["nf"][:2], PAL["b"], HOOF, lift, top, floor, legs["nf"][2])
     return out
 
 
@@ -1194,8 +1243,14 @@ class Pet:
         self.was_resting = False
         self.ear = 0.0
         self.next_ear = random.uniform(4, 12)
+        # The tail says two things. The wag -- casual, side to side -- is
+        # the all-clear, and it is what an idle deer does. The flag is
+        # the alarm: danger is here, and he only gives it when he has
+        # spooked himself into a bound. `tail` times the wag, `flag` the
+        # flag; tail_frame() says which is drawn.
         self.tail = 0.0
         self.next_tail = random.uniform(8, 20)
+        self.flag = 0.0
         self.next_talk = random.uniform(20, 40)
         self.snooze_until = 0.0
         self.last_spoke = -999.0
@@ -1490,9 +1545,10 @@ class Pet:
             self.next_chew = 0.0
 
         self.tail -= dt
+        self.flag -= dt
         self.next_tail -= dt
         if self.next_tail <= 0:
-            self.tail = 0.5
+            self.tail = WAG_SECS
             self.next_tail = random.uniform(9, 25) * (2 if resting else 1)
 
         # He only puts his head down when he's settled, parked and quiet --
@@ -1541,7 +1597,9 @@ class Pet:
             return
         if self.pause > 0:
             self.pause -= dt
-            return
+            if self.pause <= 0 and self.bounding():
+                self.flag = 1.4          # the flag goes up as he bolts, not
+            return                       # while he stands at the far end
 
         if self.mode == "home":
             if self.still:
@@ -1569,7 +1627,7 @@ class Pet:
                 self.y = max(4, min(self.y, height - self.h - 4))
                 # One trip in five he spooks himself and bounds it, tail up.
                 if random.random() < 0.2:
-                    self.speed, self.tail = 150.0, 1.4
+                    self.speed, self.flag = 150.0, 1.4
                 else:
                     self.speed = random.uniform(46, 72)
                 self.mode = "out"
@@ -1586,7 +1644,7 @@ class Pet:
                 self.mode = "back"
                 self.pause = random.uniform(1.5, 5.0)
                 if random.random() < 0.2:
-                    self.speed, self.tail = 150.0, 1.4
+                    self.speed = 150.0       # flagged when the pause ends
                 else:
                     self.speed = random.uniform(46, 72)
             else:
@@ -1629,13 +1687,31 @@ class Pet:
     def bounding(self):
         return self.moving() and self.speed > 120
 
+    def gait(self):
+        """None parked; the bound when he has spooked himself, else the
+        walk. He ambles at 46-72 px/s, about half a body length a second,
+        and that is a walk. The trot is drawn but not used: it would be
+        the gait for a faster amble, if he ever has one."""
+        if not self.moving():
+            return None
+        return "bound" if self.speed > 120 else "walk"
+
+    def tail_frame(self):
+        """2 for the flag, 1 for the wag's tip-on-the-flank half, else 0.
+        The wag alternates every WAG_BEAT: two swings, side to side."""
+        if self.flag > 0 and self.bounding():
+            return 2
+        if self.tail > 0 and int((WAG_SECS - self.tail) / WAG_BEAT) % 2 == 0:
+            return 1
+        return 0
+
     def render_key(self):
         """Everything a frame depends on. Two equal keys draw the same
         pixels, so a frame whose key hasn't moved needn't be drawn at all —
         and between a blink, an ear and a tail, most frames haven't."""
         return (int(self.x), int(self.y), self.dir, self.frame(), self.pose,
-                self.blink > 0, self.ear > 0, self.tail > 0, self.bounding(),
-                self.chew, self.doze, self.moving(),
+                self.blink > 0, self.ear > 0, self.tail_frame(), self.gait(),
+                self.chew, self.doze,
                 self.head, self.text)
 
     def frame(self):
@@ -2001,8 +2077,8 @@ def resolve_monitor(name, monitors):
 def draw_sprite(cr, pet, oy):
     px, flip = pet.px, pet.dir < 0
     pts = pixels(pet.frame(), pet.blink > 0, pet.pose,
-                 1 if pet.ear > 0 else 0, 1 if pet.tail > 0 else 0,
-                 pet.bounding(), pet.chew, pet.doze, pet.moving())
+                 1 if pet.ear > 0 else 0, pet.tail_frame(),
+                 pet.gait(), pet.chew, pet.doze)
 
     def sx(x):
         return pet.x + ((SW - 1 - x) if flip else x) * px

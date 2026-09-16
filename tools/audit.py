@@ -103,14 +103,24 @@ m._load_gtk(); import cairo
 d = os.path.join(os.environ["HOME"], ".local/state/omarchy/current/theme")
 os.makedirs(d, exist_ok=True); m.THEME_COLORS = os.path.join(d, "colors.toml")
 def lum(x): return 0.2126 * x[0] + 0.7152 * x[1] + 0.0722 * x[2]
-bad = []
+bad = []; hoof = []
 themes = sorted(glob.glob("/usr/share/omarchy/themes/*/colors.toml"))
 for f in themes:
     shutil.copy(f, m.THEME_COLORS); m.apply_theme()
     if abs(lum(m.PAL["b"]) - lum(m.OUTLINE)) < 0.25 or \
        abs(lum(m.PAL["c"]) - lum(m.PAL["b"])) < 0.03: bad.append(f.split("/")[-2])
+    # The resting hooves are two-pixel marks in the strip of shade under
+    # him, and only value separates them from it. The pick between the two
+    # hoof tones is made per theme; here is whether it was enough, and what
+    # the tone not picked would have given.
+    other = m.HOOF if m.REST_HOOF == m.FAR_HOOF else m.FAR_HOOF
+    hoof.append((abs(lum(m.REST_HOOF) - lum(m.FAR)), abs(lum(other) - lum(m.FAR)), f.split("/")[-2]))
 ck("23 every shipped theme legible", not bad and len(themes) > 0,
    "%d themes, bad: %s" % (len(themes), bad))
+thin = [(n, round(g, 3)) for g, _, n in hoof if g < 0.12]
+ck("46 resting hooves stand off the shade in every theme", not thin and len(hoof) > 0,
+   "%d themes, tightest %s at %.3f (other tone would give %.3f); under 0.12: %s" % (
+       (len(hoof),) + (min(hoof)[2], min(hoof)[0], min(hoof)[1], thin or "none") if hoof else (0, "-", 0, 0, "no themes")))
 os.remove(m.THEME_COLORS)
 # No source at all: no resolver on PATH, no colors.toml. The built-in palette
 # must stand untouched. PAL is mutated in place, so restore it first.

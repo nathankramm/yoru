@@ -102,7 +102,7 @@ it should. Whether the pose reads as a deer at rest or a deer that fell over
 is the one thing it cannot check, and that has needed a look twice now. To
 compare candidates, replace the function under test on the loaded module
 (`m._folded_legs = candidate`) and add a cell per candidate; the resting
-pose was chosen that way, from ten.
+pose was chosen that way, over three rounds of sheets.
 
 ## At the next release
 

@@ -138,6 +138,7 @@ FAR, FAR_HOOF, HOOF = rgb("7f88b5"), rgb("353a58"), rgb("414868")
 OUTLINE = rgb("16161e")
 BUBBLE_BG = rgb("1a1b26")
 ACCENT_HEX = "#7dcfff"
+REST_HOOF = None        # set below, once _rest_hoof exists
 
 THEME_COLORS = os.path.expanduser("~/.local/state/omarchy/current/theme/colors.toml")
 THEME_NAME = os.path.expanduser("~/.local/state/omarchy/current/theme.name")
@@ -146,6 +147,21 @@ THEME_NAME = os.path.expanduser("~/.local/state/omarchy/current/theme.name")
 def _blend(a, b, t):
     """Mix two rgb triples; t=0 is all a."""
     return tuple(a[i] * (1 - t) + b[i] * t for i in range(3))
+
+
+def _lum(c):
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+
+
+def _rest_hoof():
+    """The hoof tone for the resting pose: whichever of the two hoof tones
+    sits further in luminance from the strip of shade the hooves lie in.
+    Lying down, a hoof is a mark in that strip and nothing else, and a mark
+    too close in value to it melts away -- which is what happened to the
+    first attempt. Every shipped theme picks FAR_HOOF today, but on some
+    the other tone is within 0.02 of the strip, so it is measured rather
+    than assumed: a theme must not be able to take the hooves away."""
+    return max((FAR_HOOF, HOOF), key=lambda c: abs(_lum(c) - _lum(FAR)))
 
 
 def read_theme():
@@ -189,7 +205,7 @@ def apply_theme():
     """Repaint Yoru in the current theme. Semantic keys, so light modes work:
     the coat is the theme's foreground, so it always contrasts with its
     background, whichever way round they are."""
-    global PAL, FAR, FAR_HOOF, HOOF, OUTLINE, BUBBLE_BG, ACCENT_HEX
+    global PAL, FAR, FAR_HOOF, HOOF, OUTLINE, BUBBLE_BG, ACCENT_HEX, REST_HOOF
     t = read_theme()
     if not t:
         return False
@@ -209,8 +225,7 @@ def apply_theme():
     fg = col("foreground") or rgb("c0caf5")
     accent = col("accent", "cyan", "blue") or rgb("7dcfff")
 
-    def lum(c):
-        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    lum = _lum
 
     # Highlight away from the background, so the underside reads as shading
     # in dark themes and in light ones alike.
@@ -248,6 +263,7 @@ def apply_theme():
     FAR = _blend(fg, bg, 0.46)
     HOOF = col("muted", "dark_foreground") or _blend(fg, bg, 0.65)
     FAR_HOOF = _blend(HOOF, bg, 0.45)
+    REST_HOOF = _rest_hoof()
     OUTLINE = bg
     BUBBLE_BG = col("dark_background", "background") or bg
     ACCENT_HEX = "#%02x%02x%02x" % tuple(round(c * 255) for c in accent)
@@ -306,22 +322,28 @@ BOUND = [
 # Grazing swings that whole assembly down and out rather than redrawing it,
 # which keeps one animal instead of two that only mostly match.
 GRAZE_SHIFT = (2, 4)
-# Lying down is the same trick the other way about: the body drops by the
-# height of its legs less one row, so it sits on the legs folded under it,
-# and the head settles one row more, forward and down -- up enough to
-# watch, not the alert stand. The legs themselves are not drawn. At 24x24
-# a two-pixel hoof reads as grit, and a knee or a hoof ahead of the chest
-# reads as a deer that fell over; what a couched deer shows from the side
-# is an unbroken silhouette on the ground, so that is what he shows: a
-# strip of shade along the ground line, inset a pixel at each end, and the
-# eye folds the legs under it.
+# Lying down is the same trick the other way about. The body drops by the
+# height of its legs less one row, so it sits on a strip of shade along
+# the ground line where the folded legs are; the legs themselves are not
+# drawn, only two hooves as marks in that strip, one at the rear and one
+# midway along the belly. At 24x24 anything more reads as grit, and a knee
+# or a hoof ahead of the chest reads as a deer that fell over. What says
+# "settled" is the head: pulled back three and down one, so the neck rows
+# disappear into the shoulders and the muzzle sits over the chest instead
+# of ahead of it. The body itself is left alone -- this is a transition
+# from the standing animal, and he has to stay recognisably the same one.
 REST_SHIFT = (0, 5)
-REST_HEAD = (1, 6)
+REST_HEAD = (-2, 7)
 
 
 def _folded_legs(out):
     for x in range(3, 15):
         out.append((x, 23, FAR))
+    for x in (3, 4, 9, 10):
+        out.append((x, 23, REST_HOOF))
+
+
+REST_HOOF = _rest_hoof()
 
 
 def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False):

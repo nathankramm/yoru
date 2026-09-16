@@ -308,9 +308,9 @@ does anything. It's just him.
 
 Snoozed, or once you've been away long enough to count as gone, he lies down:
 legs folded under, head pulled back. He blinks, his ears keep going the way a
-bedded deer's do, and he chews — a bolus at a whitetail's real rate, a pause,
-the next — because that's what a bedded deer is doing, and it's what stops the
-pose reading as a frozen frame. Bedded a while, he dozes: the eye shuts for
+bedded deer's do, and he chews — short irregular bouts near a whitetail's real rate,
+longer stills between — because that's what a bedded deer is doing, and it's
+what stops the pose reading as a frozen frame. Bedded a while, he dozes: the eye shuts for
 thirty seconds to a few minutes, the cud stops, then he's awake and chewing
 again, by turns for as long as he's down. The head never drops — deer lie down
 far more than they sleep head-down, and at this size a lowered head read as a

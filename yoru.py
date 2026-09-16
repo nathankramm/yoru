@@ -354,14 +354,22 @@ SETTLE_SECS = 0.15
 
 # Cud. A bedded deer chews, and it is the motion that keeps the pose from
 # reading as a frozen frame. The lower jaw is one row of the head; a chew
-# puts one pixel of chin ahead of it, under the muzzle, and moves nothing
-# else -- lateral, the way a ruminant's jaw moves, never the mouth
-# opening, which would read as speech. A whitetail chews a bolus 40-55
-# times at 78-93 a minute, then swallows and brings up the next: so, a
-# bout of about forty chews at a real rate, a pause, again.
-CHEW_PERIOD = 0.75
-CHEW_BOUT = (36, 44)
-CHEW_PAUSE = (5, 10)
+# is one pixel of chin ahead of it, under the muzzle, moving between two
+# places -- lateral, the way a ruminant's jaw moves, never the mouth
+# opening, which would read as speech, and never the row itself, whose
+# rear pixel is the neck line on the pulled-back head. A jaw that moves
+# between two places reads as motion; one that appears and disappears
+# reads as a light.
+#
+# The real numbers: a whitetail chews a bolus 40-55 times at 78-93 a
+# minute, then swallows and brings up the next. What is shown is
+# deliberately not that. At 24x24 one pixel on a fixed beat for forty
+# seconds is exactly a blinking status light, so each chew gets its own
+# interval around the real mean, the bouts are short -- ten seconds or
+# so -- and the stillness between them is longer than the chewing.
+CHEW_STEP = (0.28, 0.50)      # half a chew, jittered: 0.56-1.0s a chew
+CHEW_BOUT = (8, 14)           # chews per bout
+CHEW_PAUSE = (10, 20)         # seconds between bouts
 # Dozing. Bedded deer sleep far less than they lie down (Woods), and when
 # they do it is brief: "30 seconds to a few minutes of dozing, followed by
 # a brief alert period, and then more dozing" (Adams, NDA). The pose does
@@ -416,12 +424,12 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False, chew=0, doze=
             elif resting:
                 dx, dy = REST_HEAD if y <= 11 else REST_SHIFT
                 if chew and y == 9 and x == 20:
-                    # The chin, one pixel ahead of the jaw's front end.
-                    # Added, not slid: sliding the row also took its rear
-                    # pixel, which on the pulled-back head is the throat
-                    # at the head/neck junction, and the neck twitched
-                    # once a second.
-                    out.append((x + dx + 1, y + bob + dy, col))
+                    # The chin: one or two pixels ahead of the jaw's front
+                    # end. Added, not slid: sliding the row also took its
+                    # rear pixel, which on the pulled-back head is the
+                    # throat at the head/neck junction, and the neck
+                    # twitched once a second.
+                    out.append((x + dx + chew, y + bob + dy, col))
             elif settling:
                 dx, dy = SETTLE_HEAD if y <= 11 else SETTLE_SHIFT
             # The head is still lying down; the ear is not. A bedded deer's
@@ -1165,9 +1173,9 @@ class Pet:
         self.settle_to = "stand"
         self.settle_for = 0.0
         self.rouse = False
-        # Cud: jaw forward or not, time to the next change, chews left in
-        # the bout (0 between boluses).
-        self.chew = False
+        # Cud: where the chin is (0 tucked, 1 or 2 pixels forward), time
+        # to its next move, and moves left in the bout (0 between bouts).
+        self.chew = 0
         self.next_chew = 0.0
         self.chews_left = 0
         # Dozing: eye shut or not, and time to the next change.
@@ -1452,22 +1460,22 @@ class Pet:
         # regular inside a bout and the bouts are not, so he never looks
         # like a metronome.
         if resting and self.doze:
-            self.chew = False
+            self.chew = 0
         elif resting:
             self.next_chew -= dt
             if self.next_chew <= 0:
                 if self.chews_left > 0:
-                    self.chew = not self.chew
+                    self.chew = 2 if self.chew == 1 else 1
                     self.chews_left -= 1
-                    self.next_chew = CHEW_PERIOD / 2
+                    self.next_chew = random.uniform(*CHEW_STEP)
                     if self.chews_left == 0:
-                        self.chew = False
+                        self.chew = 0
                         self.next_chew = random.uniform(*CHEW_PAUSE)
                 else:
                     self.chews_left = 2 * random.randint(*CHEW_BOUT)
                     self.next_chew = 0.0
         elif self.chew or self.chews_left:
-            self.chew = False
+            self.chew = 0
             self.chews_left = 0
             self.next_chew = 0.0
 

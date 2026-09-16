@@ -404,7 +404,7 @@ def lie_for_2h(seed, **state):
     q.step(.033, 0.0, 1920, 1080); now = 0.0
     c = collections.Counter(); bad = collections.Counter()
     n = dict(blinks=0, ears=0, tails=0, walks=0, chews=0, dozing=0, ears_dozing=0)
-    was = dict(b=False, e=False, t=False, c=False)
+    was = dict(b=False, e=False, t=False, c=0)
     for i in range(int(7200 / .033)):
         now += .033
         if i % int(600 / .033) == 0:
@@ -428,14 +428,14 @@ def lie_for_2h(seed, **state):
             if q.blink > 0 and not was["b"]: n["blinks"] += 1
             if q.ear > 0 and not was["e"]: n["ears"] += 1
             if q.tail > 0 and not was["t"]: n["tails"] += 1
-            if q.chew and not was["c"]: n["chews"] += 1
+            if q.chew == 1 and was["c"] != 1: n["chews"] += 1
         was = dict(b=q.blink > 0, e=q.ear > 0, t=q.tail > 0, c=q.chew)
     n["dozing"] = n["dozing"] / max(1, c["rest"])
     return c["rest"] / sum(c.values()), c["settle"], bad, n
 share, settles, bad, n = lie_for_2h(3, snooze_until=1e9, present_until=1e9)
 ck("45 snoozed 2h: lies 80%+, no walk, never speaking, blinks, ear moves, chews, dozes, never snaps",
    share > 0.80 and not bad and n["walks"] == 0 and n["blinks"] > 100 and n["ears"] > 200
-   and n["tails"] > 10 and n["chews"] > 500 and settles > 0 and 0.3 < n["dozing"] < 0.8 and n["ears_dozing"] > 50,
+   and n["tails"] > 10 and n["chews"] > 200 and settles > 0 and 0.3 < n["dozing"] < 0.8 and n["ears_dozing"] > 50,
    "lying %.0f%%, %d settle frames; %s; %d walks; lying: %d blinks, %d ear, %d tail, %d chews, eye shut %.0f%% (%d ear moves shut)" % (
        100 * share, settles, dict(bad) or "clean", n["walks"], n["blinks"], n["ears"], n["tails"], n["chews"],
        100 * n["dozing"], n["ears_dozing"]))
@@ -477,31 +477,41 @@ ck("47 settle frame held ~150ms both ways; a word and a walk get up through it",
    "down: %d frames via %s, %d keys; up: %d via %s, %d keys; word: %d via %s; walk: %d via %s then %s" % (
        down, via_down, keys_down, up, via_up, keys_up, word, via_word, walk, via_walk,
        "walking" if walked else "NOT walking"))
-# Cud. Lying down, the jaw moves at a whitetail's real rate -- 78-93 chews a
-# minute -- in bouts of about forty with a pause between boluses; standing, it
-# never moves; and every chew changes the render key, or it never draws.
+# Cud. Lying down and awake, the chin moves between two places at about a
+# whitetail's rate -- the real 78-93 a minute, jittered chew to chew so it is
+# never on a beat -- in short bouts of 8-14 with 10-20s still between them;
+# standing, it never moves; and every move changes the render key, or it
+# never draws. The regularity is what the check is against: a fixed period
+# read as a loading indicator.
 q = fresh_pet(); q.present_until = 1e9; q.snooze_until = 1e9; q.next_talk = q.next_roam = 1e9
 t = run_pet(q, 2, 0.0); assert q.pose == "rest"
 q.next_doze = 1e9                                    # awake throughout: the cud rhythm alone (50 has the doze)
-chews = []; changes = 0; k = q.render_key(); was = q.chew; gaps = []; last = None
+chews = []; changes = 0; k = q.render_key(); was = q.chew; gaps = []; last = None; bouts = []; run = 0; mid_bout = bool(q.chew)
 for i in range(int(600 / .033)):
     t += .033; q.step(.033, t, 1920, 1080)
     if q.render_key() != k: changes += 1; k = q.render_key()
-    if q.chew and not was:
+    if q.chew and not was: run = 0
+    if q.chew == 1 and was != 1: run += 1
+    if not q.chew and was: bouts.append(run)
+    if q.chew == 1 and was != 1:
         chews.append(t)
         if last is not None: gaps.append(t - last)
         last = t
     was = q.chew
+if mid_bout: bouts = bouts[1:]                       # a bout the loop joined partway is not a bout
 inbout = [g for g in gaps if g < 2]; pauses = [g for g in gaps if g >= 2]
 rate = 60 / statistics.mean(inbout) if inbout else 0
+jitter = statistics.pstdev(inbout) if len(inbout) > 1 else 0
 q.snooze_until = 0.0; t = run_pet(q, 1, t); standing_chews = 0
 for i in range(int(60 / .033)):
     t += .033; q.step(.033, t, 1920, 1080); standing_chews += q.chew
-ck("49 cud: real chew rate in bouts with pauses, only lying down, every chew drawn",
-   70 <= rate <= 100 and len(pauses) >= 5 and all(4 <= p <= 12 for p in pauses)
-   and changes >= 2 * len(chews) - 2 and standing_chews == 0 and q.pose == "stand",
-   "10 min lying: %d chews at %.0f/min, %d pauses of %.0f-%.0fs, %d key changes; standing 1 min: %d chews" % (
-       len(chews), rate, len(pauses), min(pauses) if pauses else 0, max(pauses) if pauses else 0, changes, standing_chews))
+ck("49 cud: short jittered bouts near the real rate, long stills, only lying down, every move drawn",
+   60 <= rate <= 100 and jitter >= 0.05 and len(pauses) >= 10 and all(9 <= p <= 22 for p in pauses)
+   and bouts and all(8 <= b <= 14 for b in bouts) and changes >= 2 * len(chews) - 2
+   and standing_chews == 0 and q.pose == "stand",
+   "10 min lying: %d chews at %.0f/min (sd %.2fs), %d bouts of %d-%d chews, %d stills of %.0f-%.0fs, %d key changes; standing 1 min: %d chews" % (
+       len(chews), rate, jitter, len(bouts), min(bouts) if bouts else 0, max(bouts) if bouts else 0, len(pauses),
+       min(pauses) if pauses else 0, max(pauses) if pauses else 0, changes, standing_chews))
 # The doze cycle, on Adams' numbers: he beds alert, then dozes 30s to a few
 # minutes, wakes briefly, dozes again, for as long as he is down. Eye shut
 # means no cud and no blink; the ear goes on regardless; and off the bed the

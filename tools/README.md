@@ -10,9 +10,9 @@ A tip is verified against the **installed release** — the files under
 manual and not against the `quattro` branch on GitHub.
 
 The manual's hotkeys table says `Super + Q` closes a window. It is not bound
-in 4.0.3; nothing in `default/hypr/bindings/` mentions it. The branch had
+in 4.0.4; nothing in `default/hypr/bindings/` mentions it. The branch had
 `ori`, `o.rebind` and nine agents at the time the tips were written; the
-4.0.3 packages have neither of the first two and thirteen of the last. The
+4.0.4 packages have neither of the first two and thirteen of the last. The
 tree is the only thing that cannot be ahead of, or behind, what the user's
 keys do.
 
@@ -73,10 +73,11 @@ printed next to each sentence, and the script behind the label is under
 `/usr/share/omarchy/bin`. That audit found two in 77 last time; it is worth
 the twenty minutes.
 
-## Known 4.0.3 quirks
+## Known 4.0.4 quirks
 
-- **`omarchy debug` does not route from a desktop terminal.** The binary is
-  shipped — `omarchy-settings` puts `omarchy-debug`, `omarchy-debug-idle` and
+- **`omarchy debug` does not route from a desktop terminal.** Still present
+  in 4.0.4 (checked 2026-09-16; `envs.lua` and the dispatcher are unchanged).
+  The binary is shipped — `omarchy-settings` puts `omarchy-debug`, `omarchy-debug-idle` and
   `omarchy-upload-log` in `/usr/bin` — but package-owned
   `default/hypr/envs.lua` prepends `/usr/share/omarchy/bin` to PATH for every
   Hyprland-launched process, and the `omarchy` dispatcher there only scans

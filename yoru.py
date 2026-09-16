@@ -600,9 +600,10 @@ KNOWLEDGE = [
 
     # ---------------------------------------------------------- grammar ----
     # The shape of the map, not its contents. Fractions are from the
-    # installed 4.0.3 tree (tools/stock-binds.lua stock force, 228 binds):
-    # Super+Shift launches on 17 of 17 letters and moves the window on 14 of
-    # 15 focus keys; Super alone works the window or workspace on 32 of 42;
+    # installed 4.0.4 tree (tools/stock-binds.lua stock force, 228 binds):
+    # Super+Shift launches on 15 of 15 letters (17 launchers, counting Return
+    # and Slash) and moves the window on 14 of 15 focus keys; Super alone
+    # works the window or workspace on 32 of 42;
     # Super+Ctrl is a panel, menu or toggle on 28 of 42; of the 62 pairs that
     # differ only by Alt, 57 are a variant or sibling and 4 of the 5 that
     # aren't are Super+Ctrl+Alt. Not bindings, so not in HYPR_TOPICS: a rule
@@ -824,7 +825,7 @@ NEEDS = {
     "spotify": ["fixes:Ctrl + Minus"],
     "omacut": ["apps:Omacut"],
     "dua-cli": ["apps:Disk Usage"],
-    "voxtype": ["capture:Super + Ctrl + X"],
+    "voxtype-bin": ["capture:Super + Ctrl + X"],
     "herdr": ["herdr:Super + Ctrl + Return", "herdr:hdl", "apps:Super + Ctrl + Return"],
     "lazygit": ["git:Tab", "neovim:Space G G"],
     "tesseract": ["capture:Super + Ctrl + Print Screen"],

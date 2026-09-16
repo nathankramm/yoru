@@ -625,10 +625,11 @@ ck("50 doze cycle: beds alert, dozes 30s-3min, wakes 15-60s, no cud or blink shu
        "%.0f" % first_shut if first_shut is not None else "never", len(bouts), min(bouts) if bouts else 0,
        max(bouts) if bouts else 0, len(alerts), min(alerts) if alerts else 0, max(alerts) if alerts else 0,
        100 * shut_share, chews_shut, blinks_shut, ear_shut, "open" if rises_open else "SHUT"))
-# Trips go the way he faces -- into the open, away from the nearer edge -- as
+# Trips go into the open -- away from the nearer edge, the way he does not
+# face when parked -- as
 # far as that side holds, never shorter than two strides. From the default
 # corner (24px from the right edge) every trip goes inward and none is a
-# shuffle; from the middle they all go the way he happens to face; parked
+# shuffle; from the middle they all go the one way `open` happens to point; parked
 # with no room on the open side he skips the roam rather than take two steps.
 def trips(home_x, n=60, width=1920):
     q = m.Pet(O, m.KNOWLEDGE); q.seen = set(); q.present_until = 1e9; q.next_talk = q.next_graze = 1e9
@@ -647,20 +648,22 @@ middle_ok = all(abs(d) >= mt for d in middle) and len({d > 0 for d in middle}) =
 # a surface too narrow for a trip either side: nothing but skips
 narrow = trips(4 + int(mt) - 1, width=96 + 8 + 2 * (int(mt) - 1))   # 69px each side
 ck("53 trips fit the room and are never a shuffle", mt == 70.4 and corner_ok and middle_ok and all(d == 0 for d in narrow),
-   "minimum %.0fpx; corner: %d trips, all inward, %.0f-%.0fpx; middle: %d right %d left (one way, as he faces), shortest %.0fpx; no room: %d of %d skipped" % (
+   "minimum %.0fpx; corner: %d trips, all inward, %.0f-%.0fpx; middle: %d right %d left (one way, into the open), shortest %.0fpx; no room: %d of %d skipped" % (
        mt, len(corner), min(abs(d) for d in corner), max(abs(d) for d in corner),
        sum(d > 0 for d in middle), sum(d < 0 for d in middle), min(abs(d) for d in middle),
        sum(d == 0 for d in narrow), len(narrow)))
 # Facing falls out of the nearer left or right edge: from every corner he
-# faces the open ground, a drag across the midline turns him, a monitor
-# change that puts the other edge nearer turns him, and within a body width
-# of equidistant he keeps the way he last faced. Speaking still turns him in.
+# faces it -- into the corner, back to the room, which is what reads as
+# turned away -- a drag across the midline turns him, a monitor change that
+# puts the other edge nearer turns him, and within a body width of
+# equidistant he keeps the way he last faced. Speaking turns him toward the
+# middle of the screen. He walks the other way, into the open.
 def parked(**kw):
     q = m.Pet(types.SimpleNamespace(**dict(vars(O), **kw)), m.KNOWLEDGE); q.seen = set()
     q.present_until = 1e9; q.next_talk = q.next_roam = q.next_graze = 1e9
     q.place(1920, 1080); q.step(.033, 0.0, 1920, 1080); return q
 faces = {c: parked(corner=c).dir for c in ("br", "tr", "bl", "tl")}
-corners_ok = faces == dict(br=-1, tr=-1, bl=1, tl=1)
+corners_ok = faces == dict(br=1, tr=1, bl=-1, tl=-1)
 q = parked(corner="br"); q.home_x = q.x = 200; q.face_open(1920); q.step(.033, 1.0, 1920, 1080); dragged = q.dir
 q.say(None, "hi", 3.0, 1.0); q.step(.033, 1.033, 1920, 1080); spoke = q.dir
 q.head = q.text = None; q.pause = 0; q.step(.033, 1.066, 1920, 1080); quiet = q.dir
@@ -670,11 +673,14 @@ c.home_x = c.x = centre + 30; c.face_open(1920); c.step(.033, 2.0, 1920, 1080); 
 c.home_x = c.x = centre + 200; c.face_open(1920); c.step(.033, 2.033, 1920, 1080); big = c.dir  # a body past: turns
 r = parked(corner="br"); r.home_x = r.x = 700; r.face_open(1920); r.step(.033, 3.0, 1920, 1080); wide = r.dir   # 696 left, 1120 right
 r.step(.033, 3.033, 1000, 1080); shrunk = r.dir                                                  # now 696 left, 200 right
-ck("54 he faces the open ground: away from the nearer edge, from every corner, after a drag, after a refit; no flip on a small drag",
-   corners_ok and dragged == 1 and spoke == -1 and quiet == 1 and before == 1 and small == 1 and big == -1
-   and wide == 1 and shrunk == -1,
+walks = parked(corner="br"); walks.next_roam = 0; walks.step(.033, 4.0, 1920, 1080); walks.step(.033, 4.033, 1920, 1080)
+walk_dir = walks.dir if walks.mode == "out" else 0
+ck("54 he faces the near edge: into the corner from every corner, after a drag, after a refit; no flip on a small drag; speaks inward; walks out",
+   corners_ok and dragged == -1 and spoke == 1 and quiet == -1 and before == -1 and small == -1 and big == 1
+   and wide == -1 and shrunk == 1 and walk_dir == -1,
    "corners %s; dragged to x=200 -> %d, speaking %d, quiet again %d; centre-200 -> %d, +30 past centre -> %d, +200 -> %d; "
-   "x=700 on 1920 -> %d, surface to 1000 -> %d" % (faces, dragged, spoke, quiet, before, small, big, wide, shrunk))
+   "x=700 on 1920 -> %d, surface to 1000 -> %d; from br he walks %s" % (
+       faces, dragged, spoke, quiet, before, small, big, wide, shrunk, {-1: "left, into the room", 1: "RIGHT", 0: "NOT AT ALL"}[walk_dir]))
 # Cadence. Two speeds and a decay, all from tools/exhaust.py. A fresh user at
 # the default has every fundamental inside roughly a hundred minutes of
 # presence (300 s, ~21 utterances at 15% chatter); after that the gap between

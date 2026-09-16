@@ -1220,10 +1220,11 @@ class Pet:
         self.size = None            # surface size last seen by step()
 
         # Which way the open ground lies from home: away from the nearer of
-        # the left and right edges. He faces it and walks into it. One fact,
-        # set where home is set -- place, refit, drag -- and read from.
+        # the left and right edges. He walks into it, and parks facing the
+        # other way -- into the corner, his back to the room. One fact, set
+        # where home is set -- place, refit, drag -- and read from.
         self.open = -1
-        self.dir = self.open
+        self.dir = -self.open
         self.speed = 0.0
         self.dist = 0.0
         self.mode = "home"          # home | out | back | drag
@@ -1309,15 +1310,18 @@ class Pet:
         return (self.home_x - 4) if side < 0 else (width - self.w - 4) - self.home_x
 
     def face_open(self, width):
-        """Point `open` away from the nearer edge. An animal parked against
-        cover faces the open ground, not the wall, so turning away from the
-        user is not a rule of its own but where he is standing. Within a
-        body width of equidistant he keeps the way he last faced: a deer
-        parked at the bottom centre must not flip on a pixel of drag."""
+        """Point `open` away from the nearer edge, and face him the other
+        way, into it. Facing the room reads as watching the user work,
+        which is the thing the turn-away exists to avoid; facing out of the
+        corner reads as turned away. He turns to walk into the open and
+        turns back when he parks, which is what an animal does: it moves
+        facing the open and settles facing its cover. Within a body width
+        of equidistant he keeps the way he last faced: a deer parked at
+        the bottom centre must not flip on a pixel of drag."""
         left, right = self.room(width, -1), self.room(width, 1)
         if abs(left - right) >= self.w:
             self.open = 1 if left < right else -1
-        self.dir = self.open
+        self.dir = -self.open
 
     def clamp_home(self, width, height):
         self.home_x = max(4, min(self.home_x, width - self.w - 4))
@@ -1615,7 +1619,9 @@ class Pet:
             # is literally "turn away from the user when not called into
             # service". So he grazes outward, and turns to face you only when
             # he actually has something to say.
-            self.dir = -self.open if self.text else self.open
+            # Idle, into the corner. Speaking, he turns toward the middle
+            # of the screen, where the user's attention is.
+            self.dir = self.open if self.text else -self.open
 
         if self.mode == "drag":
             return
@@ -1641,8 +1647,8 @@ class Pet:
                         self.pose = "stand"
                         self.graze_for = 0.0
                     return
-                # He walks the way he faces: into the open ground, away
-                # from the nearer edge, as far as that side holds. Home is
+                # He turns and walks into the open ground, away from the
+                # nearer edge, as far as that side holds. Home is
                 # usually against an edge, and a draw symmetric about it
                 # clamped to the surface made half his walks a 20px shuffle
                 # -- with a four-beat walk, a truncated cycle. With no room

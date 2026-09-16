@@ -309,6 +309,13 @@ WALK = [
 ]
 WALK_PHASE = dict(nr=0, nf=1, fr=2, ff=3)
 WALK_NOD = [0, 1, 0, 1]
+# Sprite pixels of travel per frame of each gait; four frames to a stride.
+WALK_STEP, BOUND_STEP = 2.2, 3.2
+# The shortest trip worth taking, in strides. One is the gait's floor --
+# every foot lifts once, from any phase, since `dist` carries over -- but a
+# deer that stops after his first stride reads as a hesitation, not a trip.
+# Two is where a walk reads as going somewhere: 70px at the default scale.
+MIN_TRIP_STRIDES = 2
 # The wag: two swings, the tip on the flank for a beat and off for a beat.
 WAG_SECS = 0.6
 WAG_BEAT = 0.15
@@ -1619,9 +1626,25 @@ class Pet:
                         self.pose = "stand"
                         self.graze_for = 0.0
                     return
+                # Pick the target in the room he actually has. Home is
+                # usually against an edge, and a draw symmetric about it
+                # clamped to the surface made half his walks a 20px
+                # shuffle -- with a four-beat walk, a truncated cycle.
+                # Each side with room for a trip is a candidate, weighted
+                # by its room, so a corner-parked deer walks inward and a
+                # central one goes both ways; with no room either side he
+                # skips this one and tries again later.
                 span = min(width * 0.45, 520)
-                self.target = max(4, min(
-                    self.home_x + random.uniform(-span, span), width - self.w - 4))
+                room = {-1: self.home_x - 4, 1: (width - self.w - 4) - self.home_x}
+                sides = [d for d, r in room.items() if r >= self.min_trip()]
+                if not sides:
+                    self.next_roam = random.uniform(self.roam * 0.7, self.roam * 1.6)
+                    debug("roam: no room for a trip (%dpx left, %dpx right, need %d); later",
+                          room[-1], room[1], self.min_trip())
+                    return
+                d = random.choices(sides, weights=[room[s] for s in sides])[0]
+                self.target = self.home_x + d * random.uniform(
+                    self.min_trip(), min(span, room[d]))
                 # A walk only moves x. If y is off the surface he would walk
                 # past unseen, so bring it in before he sets off.
                 self.y = max(4, min(self.y, height - self.h - 4))
@@ -1714,10 +1737,13 @@ class Pet:
                 self.chew, self.doze,
                 self.head, self.text)
 
+    def min_trip(self):
+        return MIN_TRIP_STRIDES * 4 * WALK_STEP * self.px
+
     def frame(self):
         if not self.moving():
             return 1
-        step = self.px * (3.2 if self.bounding() else 2.2)
+        step = self.px * (BOUND_STEP if self.bounding() else WALK_STEP)
         return int(self.dist / step) % 4
 
 

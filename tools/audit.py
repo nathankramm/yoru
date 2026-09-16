@@ -625,6 +625,31 @@ ck("50 doze cycle: beds alert, dozes 30s-3min, wakes 15-60s, no cud or blink shu
        "%.0f" % first_shut if first_shut is not None else "never", len(bouts), min(bouts) if bouts else 0,
        max(bouts) if bouts else 0, len(alerts), min(alerts) if alerts else 0, max(alerts) if alerts else 0,
        100 * shut_share, chews_shut, blinks_shut, ear_shut, "open" if rises_open else "SHUT"))
+# Trips are drawn from the room he has, never shorter than two strides. From
+# the default corner (24px from the right edge) every trip goes inward and
+# none is a shuffle; from the middle of the screen they go both ways; parked
+# with no room either side he skips the roam rather than take two steps.
+def trips(home_x, n=60, width=1920):
+    q = m.Pet(O, m.KNOWLEDGE); q.seen = set(); q.present_until = 1e9; q.next_talk = q.next_graze = 1e9
+    q.place(width, 1080); q.home_x = q.x = home_x; q.step(.033, 0.0, width, 1080)
+    out = []; t = 0.0
+    for _ in range(n):
+        q.next_roam = 0; q.pause = 0; q.mode = "home"; q.pose = "stand"
+        q.step(.033, t, width, 1080); t += .033
+        if q.mode != "out": out.append(0); continue
+        out.append(q.target - q.home_x); q.mode = "home"
+    return out
+mt = m.Pet(O, m.KNOWLEDGE).min_trip()
+corner = trips(1920 - 96 - 24); middle = trips(912); wall = trips(1920 - 96 - 4, width=1920)
+corner_ok = all(d <= -mt for d in corner)
+middle_ok = any(d >= mt for d in middle) and any(d <= -mt for d in middle) and all(abs(d) >= mt for d in middle)
+# a surface too narrow for a trip either side: nothing but skips
+narrow = trips(4 + int(mt) - 1, width=96 + 8 + 2 * (int(mt) - 1))   # 69px each side
+ck("53 trips fit the room and are never a shuffle", mt == 70.4 and corner_ok and middle_ok and all(d == 0 for d in narrow),
+   "minimum %.0fpx; corner: %d trips, all inward, %.0f-%.0fpx; middle: %d right %d left, shortest %.0fpx; no room: %d of %d skipped" % (
+       mt, len(corner), min(abs(d) for d in corner), max(abs(d) for d in corner),
+       sum(d > 0 for d in middle), sum(d < 0 for d in middle), min(abs(d) for d in middle),
+       sum(d == 0 for d in narrow), len(narrow)))
 # Cadence. Two speeds and a decay, all from tools/exhaust.py. A fresh user at
 # the default has every fundamental inside roughly a hundred minutes of
 # presence (300 s, ~21 utterances at 15% chatter); after that the gap between

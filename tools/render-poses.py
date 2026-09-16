@@ -30,12 +30,13 @@ out = args[0] if args else "poses.png"
 # (label, pixels() arguments, mirrored)
 CELLS = [
     ("stand", dict(frame=1, blink=False, pose="stand"), False),
+    ("trot 1 (on the pass)", dict(frame=1, blink=False, moving=True), False),
     ("stand, ear + tail", dict(frame=1, blink=False, pose="stand", ear=1, tail=1), False),
     ("graze", dict(frame=1, blink=False, pose="graze"), False),
-    ("trot 0", dict(frame=0, blink=False), False),
-    ("trot 2", dict(frame=2, blink=False), False),
-    ("bound 0", dict(frame=0, blink=False, bound=True), False),
-    ("bound 2", dict(frame=2, blink=False, bound=True), False),
+    ("trot 0", dict(frame=0, blink=False, moving=True), False),
+    ("trot 2", dict(frame=2, blink=False, moving=True), False),
+    ("bound 0", dict(frame=0, blink=False, bound=True, moving=True), False),
+    ("bound 2", dict(frame=2, blink=False, bound=True, moving=True), False),
     ("settle (between)", dict(frame=1, blink=False, pose="settle"), False),
     ("rest", dict(frame=1, blink=False, pose="rest"), False),
     ("rest, blink", dict(frame=1, blink=True, pose="rest"), False),

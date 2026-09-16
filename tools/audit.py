@@ -178,10 +178,13 @@ oob = [(pose, b, f) for pose in ("stand", "graze", "rest", "settle") for b in (F
 ck("26 all pose combos in bounds", not oob, oob[:2])
 # A floating pixel is a rendering fault in any pose, and a pixel-diff that
 # only looks at what was removed passes an added one happily. Every pixel of
-# every combination -- pose, gait, frame, blink, ear, tail, chew, doze -- must
-# have an 8-neighbour in the sprite. The component count is reported, not
-# asserted: the parked frames (BOB lifts the body a row off straight legs)
-# have been five pieces since the first commit.
+# every combination -- pose, gait, frame, blink, ear, tail, chew, doze,
+# parked or moving -- must have an 8-neighbour in the sprite, and the sprite
+# must be one piece. Parked he does not bob; trotting, the body rises a row
+# on frames 1 and 3 and the legs lengthen to meet it; bounding, the legs
+# lift with the body. So every frame is one piece. It was five, parked and
+# on the trot's pass frames, from the first commit until the bob stopped
+# applying to a standing animal.
 def neighbours(p, pts):
     return [(p[0] + dx, p[1] + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
             if (dx or dy) and (p[0] + dx, p[1] + dy) in pts]
@@ -203,14 +206,19 @@ for pose in ("stand", "graze", "rest", "settle"):
                     for chew in (0, 1):
                         for doze in (0, 1):
                             for blink in (False, True):
-                                combos += 1
-                                pts = {(x, y) for x, y, _ in m.pixels(f, blink, pose, e, tl, b, chew, doze)}
-                                lonely += [(pose, f, p) for p in pts if not neighbours(p, pts)]
-                                pieces[(pose, f, components(pts))] += 1
-multi = sorted({(pose, f, n) for (pose, f, n), _ in pieces.items() if n > 1})
-ck("51 no floating pixel in any pose", not lonely,
-   "%d combinations, floating: %s; more than one piece: %s" % (combos, lonely[:3] or "none",
-   ", ".join("%s frame %d -> %d" % x for x in multi) or "none"))
+                                for moving in (False, True):
+                                    combos += 1
+                                    pts = {(x, y) for x, y, _ in m.pixels(f, blink, pose, e, tl, b, chew, doze, moving)}
+                                    lonely += [(pose, f, p) for p in pts if not neighbours(p, pts)]
+                                    pieces[(pose, "moving" if moving else "parked", f, components(pts))] += 1
+multi = sorted({(pose, mv, f, n) for (pose, mv, f, n), _ in pieces.items() if n > 1})
+# parked he must not bob at all: the body (rows 0-17) sits where frame 0's
+# does on every frame, and only when moving does it rise on frames 1 and 3
+body = lambda f, mv: sorted(p for p in m.pixels(f, False, "stand", moving=mv) if p[1] <= 17)
+still = all(body(f, False) == body(0, False) for f in range(4)) and body(1, True) != body(0, True)
+ck("51 every frame one piece, no floating pixel, no bob while parked", not lonely and not multi and still,
+   "%d combinations, floating: %s; more than one piece: %s; parked body never moves, trotting body does: %s" % (
+       combos, lonely[:3] or "none", ", ".join("%s %s frame %d -> %d" % x for x in multi) or "none", still))
 # Tips generated from the user's own bindings.lua replace the curated tip for
 # a key the user rebound and add the rest. Afterwards no key may be covered
 # twice and every id must be unique. Run against the real file when there is

@@ -299,17 +299,21 @@ GAIT = [
 BOB = [0, -1, 0, -1]
 
 
-def _leg(out, ax, d1, d2, col, hoof, lift=0, floor=17):
-    """Rows 18-23 below the body's last row, `floor`. A body that has come
-    down over the legs hides their tops; drawing them anyway puts four
-    coat-coloured stripes through the belly."""
-    for y in range(18, 21):
+def _leg(out, ax, d1, d2, col, hoof, lift=0, top=18, floor=None):
+    """Upper leg from `top` to row 20, lower leg 21-22, hoof 23, all plus
+    `lift`. When the trot bobs the body up a row the upper leg starts a
+    row higher to meet it -- the legs straighten under the animal, the
+    hooves stay on the ground -- or row 17 empties and the halo fills it
+    as a seam. A body that has come down over the legs (`floor`) hides
+    their tops; drawing them anyway puts four coat-coloured stripes
+    through the belly."""
+    for y in range(top, 21):
         for i in range(2):
-            if y > floor:
+            if floor is None or y > floor:
                 out.append((ax + d1 + i, y + lift, col))
     for y in range(21, 23):
         for i in range(2):
-            if y > floor:
+            if floor is None or y > floor:
                 out.append((ax + d2 + i, y + lift, col))
     for i in range(2):
         out.append((ax + d2 + i, 23 + lift, hoof))
@@ -393,7 +397,8 @@ def _folded_legs(out):
 REST_HOOF = _rest_hoof()
 
 
-def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False, chew=0, doze=0):
+def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False, chew=0, doze=0,
+           moving=False):
     out = []
     gait = BOUND if bound else GAIT
     near, far = gait[frame], gait[(frame + 2) % 4]
@@ -401,16 +406,20 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False, chew=0, doze=
     settling = pose == "settle"
     if settling:
         near = far = SETTLE_LEGS
-    # In a bound the animal leaves the ground, so the legs rise with the body;
-    # lifting the body alone just severs them. Lying down there is nothing
-    # to bob: he sits on the ground line whatever frame the gait is on.
+    # A bob is a gait thing. Parked, there is none: he is frame 1 all day,
+    # and a body a row off its legs was a seam for as long as he stood
+    # there. Trotting, the body rises on the pass and the legs lengthen
+    # to meet it. In a bound the whole animal leaves the ground, so the
+    # legs rise with the body; lifting the body alone just severs them.
+    # Lying down there is nothing to bob either way.
     lift = near.get("lift", 0) if bound else 0
-    bob = 0 if resting or settling else (0 if bound else BOB[frame]) + lift
-    floor = 17 + SETTLE_SHIFT[1] if settling else 17
+    bob = 0 if resting or settling or not moving else (0 if bound else BOB[frame]) + lift
+    top = 18 + (0 if bound else bob)
+    floor = 17 + SETTLE_SHIFT[1] if settling else None
 
     if not resting:
-        _leg(out, 6, far["r1"], far["r2"], FAR, FAR_HOOF, lift, floor)
-        _leg(out, 10, far["f1"], far["f2"], FAR, FAR_HOOF, lift, floor)
+        _leg(out, 6, far["r1"], far["r2"], FAR, FAR_HOOF, lift, top, floor)
+        _leg(out, 10, far["f1"], far["f2"], FAR, FAR_HOOF, lift, top, floor)
 
     for y, row in enumerate(BODY):
         for x, ch in enumerate(row):
@@ -450,8 +459,8 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False, chew=0, doze=
     if resting:
         _folded_legs(out)
     else:
-        _leg(out, 3, near["r1"], near["r2"], PAL["b"], HOOF, lift, floor)
-        _leg(out, 13, near["f1"], near["f2"], PAL["b"], HOOF, lift, floor)
+        _leg(out, 3, near["r1"], near["r2"], PAL["b"], HOOF, lift, top, floor)
+        _leg(out, 13, near["f1"], near["f2"], PAL["b"], HOOF, lift, top, floor)
     return out
 
 
@@ -1614,8 +1623,11 @@ class Pet:
             debug("pose: %s -> %s%s", self._last_pose, self.pose, why)
             self._last_pose = self.pose
 
+    def moving(self):
+        return self.mode in ("out", "back") and self.pause <= 0
+
     def bounding(self):
-        return self.mode in ("out", "back") and self.pause <= 0 and self.speed > 120
+        return self.moving() and self.speed > 120
 
     def render_key(self):
         """Everything a frame depends on. Two equal keys draw the same
@@ -1623,11 +1635,11 @@ class Pet:
         and between a blink, an ear and a tail, most frames haven't."""
         return (int(self.x), int(self.y), self.dir, self.frame(), self.pose,
                 self.blink > 0, self.ear > 0, self.tail > 0, self.bounding(),
-                self.chew, self.doze,
+                self.chew, self.doze, self.moving(),
                 self.head, self.text)
 
     def frame(self):
-        if self.mode not in ("out", "back") or self.pause > 0:
+        if not self.moving():
             return 1
         step = self.px * (3.2 if self.bounding() else 2.2)
         return int(self.dist / step) % 4
@@ -1990,7 +2002,7 @@ def draw_sprite(cr, pet, oy):
     px, flip = pet.px, pet.dir < 0
     pts = pixels(pet.frame(), pet.blink > 0, pet.pose,
                  1 if pet.ear > 0 else 0, 1 if pet.tail > 0 else 0,
-                 pet.bounding(), pet.chew, pet.doze)
+                 pet.bounding(), pet.chew, pet.doze, pet.moving())
 
     def sx(x):
         return pet.x + ((SW - 1 - x) if flip else x) * px

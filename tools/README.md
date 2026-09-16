@@ -89,8 +89,8 @@ the twenty minutes.
 
 ## render-poses.py
 
-Draws every pose — standing, grazing, the trot and bound frames, resting,
-each with its blink, ear and tail — to one PNG, with the outline halo and
+Draws every pose — standing, grazing, the trot and bound frames, the settle
+frame between standing and resting, resting, each with its blink, ear and tail — to one PNG, with the outline halo and
 on the theme background exactly as `draw_sprite` puts them on screen.
 
     python3 tools/render-poses.py                # built-in palette -> poses.png

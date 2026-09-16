@@ -36,8 +36,10 @@ CELLS = [
     ("trot 2", dict(frame=2, blink=False), False),
     ("bound 0", dict(frame=0, blink=False, bound=True), False),
     ("bound 2", dict(frame=2, blink=False, bound=True), False),
+    ("settle (between)", dict(frame=1, blink=False, pose="settle"), False),
     ("rest", dict(frame=1, blink=False, pose="rest"), False),
     ("rest, blink", dict(frame=1, blink=True, pose="rest"), False),
+    ("rest, chew", dict(frame=1, blink=False, pose="rest", chew=1), False),
     ("rest, ear + tail", dict(frame=1, blink=False, pose="rest", ear=1, tail=1), False),
     ("rest, facing left", dict(frame=1, blink=False, pose="rest"), True),
 ]

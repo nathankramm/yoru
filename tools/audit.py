@@ -118,7 +118,7 @@ for f in themes:
 ck("23 every shipped theme legible", not bad and len(themes) > 0,
    "%d themes, bad: %s" % (len(themes), bad))
 thin = [(n, round(g, 3)) for g, _, n in hoof if g < 0.12]
-ck("46 resting hooves stand off the shade in every theme", not thin and len(hoof) > 0,
+ck("48 resting hooves stand off the shade in every theme", not thin and len(hoof) > 0,
    "%d themes, tightest %s at %.3f (other tone would give %.3f); under 0.12: %s" % (
        (len(hoof),) + (min(hoof)[2], min(hoof)[0], min(hoof)[1], thin or "none") if hoof else (0, "-", 0, 0, "no themes")))
 os.remove(m.THEME_COLORS)
@@ -166,7 +166,7 @@ long_lines = [(len(x), x[:50]) for x in [t[3] for t in m.KNOWLEDGE] + m.CHATTER 
               if len(x) > 93]
 ck("28 nothing over 93 characters", not long_lines,
    "longest %d" % longest[0] if not long_lines else long_lines)
-oob = [(pose, b, f) for pose in ("stand", "graze", "rest") for b in (False, True)
+oob = [(pose, b, f) for pose in ("stand", "graze", "rest", "settle") for b in (False, True)
        for f in range(4) for e in (0, 1) for tl in (0, 1)
        if (lambda q: min(z[0] for z in q) < -3 or max(z[0] for z in q) > 27
            or min(z[1] for z in q) < -4 or max(z[1] for z in q) > 25)(
@@ -247,7 +247,7 @@ region_ok = region[0] >= 0 and region[1] >= 0 and region[0] + region[2] <= 1280 
 # The roam gap: a stranded y used to survive a walk. Force a walk at the new
 # size from an off-surface y and check he is on it while walking.
 q.y = q.home_y = 900; q.next_roam = 0; q.pause = 0; q.mode = "home"
-q.step(.033, 2.0, 1280, 774)
+for i in range(12): q.step(.033, 2.0 + i * .033, 1280, 774)   # he is away, so up off the ground first
 walk_ok = q.mode == "out" and 4 <= q.y <= 774 - q.h - 4
 # And the reverse: a bigger surface changes nothing he can see.
 q2 = m.Pet(O, m.KNOWLEDGE); q2.place(1280, 774); q2.step(.033, 1.0, 1280, 774)
@@ -313,14 +313,18 @@ ck("34 --still never moves", moved == 0 and poses == 0 and modes == 0 and blinks
 # on every frame of a walk, so skipping equal keys cannot drop motion.
 q = m.Pet(O, m.KNOWLEDGE); q.seen = set(); q.next_talk = 1e9; q.next_roam = 1e9; q.next_graze = 1e9
 q.blink = q.ear = q.tail = 0; q.next_blink = q.next_ear = q.next_tail = 1e9
-q.step(.033, 0.0, 1920, 1080); k = q.render_key(); static = all(
+for i in range(30): q.step(.033, i * .033, 1920, 1080)      # he is away here: let him lie down first
+q.chews_left = 0; q.chew = False; q.next_chew = 1e9         # ...and hold his jaw too
+k = q.render_key(); static = all(
     (q.step(.033, 1 + i * .033, 1920, 1080) or q.render_key()) == k for i in range(300))
-q.next_roam = 0; q.step(.033, 20.0, 1920, 1080)      # the walk starts here...
+q.next_roam = 0; t = 20.0                            # the walk starts once he is
+while q.mode == "home" and t < 22:                   # up off the ground...
+    t += .033; q.step(.033, t, 1920, 1080)
 q.target = q.home_x - 400; q.speed = 60             # ...with a random target and
 keys = []                                            # gait; pin both, or a short
                                                      # draw arrives and pauses
 for i in range(60):
-    q.step(.033, 21 + i * .033, 1920, 1080); keys.append(q.render_key())
+    t += .033; q.step(.033, t, 1920, 1080); keys.append(q.render_key())
 walking = q.mode in ("out", "back") and len(set(keys)) > 40
 ck("35 redraw key: still when still, moving when moving", static and walking,
    "300 static frames -> 1 key; 60 walking frames -> %d keys" % len(set(keys)))
@@ -360,12 +364,12 @@ q.step(.033, t + .033, 1920, 1080); said_standing = q.pose == "stand" and bool(q
 t = run_pet(q, 4, t); lay = q.pose == "rest" and not q.text; k1 = q.render_key()
 t = run_pet(q, 60, t); stayed = q.pose == "rest"
 app.on_click(mid, 1, 0, 0); woke = not q.snoozing(t)
-q.step(.033, t + .033, 1920, 1080); up = q.pose == "stand"; k2 = q.render_key()
+q.step(.033, t + .033, 1920, 1080); up = q.pose == "settle"; k2 = q.render_key()
 t = run_pet(q, 60, t); stayed_up = q.pose == "stand"
 ck("43 middle click lies him down; again stands him up", snoozed and said_standing and lay and stayed
    and woke and up and stayed_up and k0 != k1 and k1 != k2 and k0[4] != k1[4],
    "click -> snoozed %s, answers standing %s, lying after the line %s, still lying at 60s %s; "
-   "click -> awake %s, stands %s, still standing at 60s %s; key moved %s" % (
+   "click -> awake %s, rising next frame %s, standing at 60s %s; key moved %s" % (
        snoozed, said_standing, lay, stayed, woke, up, stayed_up, k0 != k1 and k1 != k2))
 # Being away shows the same way: parked and quiet, he lies down when presence
 # lapses -- not before -- and the first sign of activity stands him up on the
@@ -375,42 +379,116 @@ def away_pet(**kw):
     q.saw_activity(0.0); q.step(.033, 0.0, 1920, 1080); return q
 q = away_pet(); t = run_pet(q, 290, 0.0); early = q.pose
 t = run_pet(q, 20, t); lapsed = q.pose; k_away = q.render_key()
-q.saw_activity(t); q.step(.033, t + .033, 1920, 1080); back = q.pose; k_back = q.render_key()
+q.saw_activity(t); q.step(.033, t + .033, 1920, 1080); rising = q.pose; k_back = q.render_key()
+t = run_pet(q, 0.3, t); back = q.pose
 s = away_pet(still=True); t = run_pet(s, 310, 0.0); still_rests = s.pose
-s.saw_activity(t); s.step(.033, t + .033, 1920, 1080); still_up = s.pose
-ck("44 away lies him down; activity stands him up", early == "stand" and lapsed == "rest" and back == "stand"
-   and k_away != k_back and still_rests == "rest" and still_up == "stand",
-   "at 290s %s, at 310s %s, one frame after activity %s; --still: %s then %s" % (
-       early, lapsed, back, still_rests, still_up))
-# Two hours snoozed with someone present and everything else running: he is
-# lying down most of the time, never while speaking or walking, gets up before
-# each walk and lies back down after, and while lying he blinks and twitches.
-# Right-click tips still arrive snoozed, so speech happens in this run too.
-random.seed(3); q = fresh_pet(); q.snooze_until = 1e9; q.present_until = 1e9
-q.step(.033, 0.0, 1920, 1080); now = 0.0
-c = collections.Counter(); bad = collections.Counter(); blinks = ears = tails = walks = 0; was_b = was_e = was_t = False
-for i in range(int(7200 / .033)):
-    now += .033
-    if i % int(600 / .033) == 0:
-        head, text = q.next_ambient(why="asked"); q.say(head, text, 9.0, now)
-    b = q.text; mode = q.mode; q.step(.033, now, 1920, 1080)
-    c[q.pose] += 1
-    if q.pose == "rest" and q.text: bad["speaking"] += 1
-    if q.pose == "rest" and q.mode != "home": bad["walking"] += 1
-    if q.pose == "graze": bad["grazing"] += 1
-    if mode == "home" and q.mode == "out":
-        walks += 1
-        if q.pose == "rest": bad["walked lying"] += 1
-    if q.pose == "rest":
-        if q.blink > 0 and not was_b: blinks += 1
-        if q.ear > 0 and not was_e: ears += 1
-        if q.tail > 0 and not was_t: tails += 1
-    was_b, was_e, was_t = q.blink > 0, q.ear > 0, q.tail > 0
-share = c["rest"] / sum(c.values())
-ck("45 snoozed: lies 80%+, never speaking or walking, blinks lying down",
-   share > 0.80 and not bad and walks > 0 and blinks > 200 and ears > 20 and tails > 10,
-   "2h: lying %.0f%%; %s; %d walks; lying: %d blinks, %d ear, %d tail" % (
-       100 * share, dict(bad) or "no rest while speaking/walking, no graze", walks, blinks, ears, tails))
+s.saw_activity(t); run_pet(s, 0.3, t); still_up = s.pose
+ck("44 away lies him down; activity stands him up", early == "stand" and lapsed == "rest" and rising == "settle"
+   and back == "stand" and k_away != k_back and still_rests == "rest" and still_up == "stand",
+   "at 290s %s, at 310s %s, one frame after activity %s, 0.3s after %s; --still: %s then %s" % (
+       early, lapsed, rising, back, still_rests, still_up))
+# Two hours lying down with everything else running, twice: snoozed with
+# someone present, and away with nobody there. Both: lying most of the time,
+# never while speaking or walking, never a snap between standing and lying,
+# and lying he blinks, his ear moves (bedded deer's ears never stop) and he
+# chews. Snoozed, no walk at all -- he was told to be quiet for an hour.
+# Away, he gets up to walk and lies back down: nobody told him to stop.
+# Right-click tips arrive either way, so speech happens in both runs.
+def lie_for_2h(seed, **state):
+    random.seed(seed); q = fresh_pet(); q.next_talk = 1e9
+    for k, v in state.items(): setattr(q, k, v)
+    q.step(.033, 0.0, 1920, 1080); now = 0.0
+    c = collections.Counter(); bad = collections.Counter(); n = dict(blinks=0, ears=0, tails=0, walks=0, chews=0)
+    was = dict(b=False, e=False, t=False, c=False)
+    for i in range(int(7200 / .033)):
+        now += .033
+        if i % int(600 / .033) == 0:
+            head, text = q.next_ambient(why="asked"); q.say(head, text, 9.0, now)
+        mode = q.mode; pose = q.pose; q.step(.033, now, 1920, 1080)
+        if {pose, q.pose} == {"stand", "rest"} or {pose, q.pose} == {"graze", "rest"}: bad["snapped"] += 1
+        c[q.pose] += 1
+        if q.pose == "rest" and q.text: bad["speaking"] += 1
+        if q.pose == "rest" and q.mode != "home": bad["walking"] += 1
+        if q.pose == "graze": bad["grazing"] += 1
+        if q.chew and q.pose != "rest": bad["chewing up"] += 1
+        if mode == "home" and q.mode == "out":
+            n["walks"] += 1
+            if q.pose == "rest": bad["walked lying"] += 1
+        if q.pose == "rest":
+            if q.blink > 0 and not was["b"]: n["blinks"] += 1
+            if q.ear > 0 and not was["e"]: n["ears"] += 1
+            if q.tail > 0 and not was["t"]: n["tails"] += 1
+            if q.chew and not was["c"]: n["chews"] += 1
+        was = dict(b=q.blink > 0, e=q.ear > 0, t=q.tail > 0, c=q.chew)
+    return c["rest"] / sum(c.values()), c["settle"], bad, n
+share, settles, bad, n = lie_for_2h(3, snooze_until=1e9, present_until=1e9)
+ck("45 snoozed 2h: lies 80%+, no walk, never speaking, blinks, ear moves, chews, never snaps",
+   share > 0.80 and not bad and n["walks"] == 0 and n["blinks"] > 200 and n["ears"] > 200
+   and n["tails"] > 10 and n["chews"] > 1000 and settles > 0,
+   "lying %.0f%%, %d settle frames; %s; %d walks; lying: %d blinks, %d ear, %d tail, %d chews" % (
+       100 * share, settles, dict(bad) or "clean", n["walks"], n["blinks"], n["ears"], n["tails"], n["chews"]))
+share, settles, bad, n = lie_for_2h(4, snooze_until=0.0, present_until=0.0)
+ck("46 away 2h: lies 80%+, gets up to walk and lies back down, never snaps",
+   share > 0.80 and not bad and n["walks"] > 0 and n["blinks"] > 200 and n["ears"] > 200 and settles > 0,
+   "lying %.0f%%, %d settle frames; %s; %d walks; lying: %d blinks, %d ear, %d tail, %d chews" % (
+       100 * share, settles, dict(bad) or "clean", n["walks"], n["blinks"], n["ears"], n["tails"], n["chews"]))
+# The settle frame: going down and getting up both hold it for about 150ms
+# -- four or five frames at 33ms -- and both transitions change the render
+# key three times, so all three drawings reach the screen. A word from a
+# resting deer and a walk from one both get up through it too.
+def hold(q, t, dt=.033):
+    """Step until the pose is neither settle nor what it was; return the
+    settle frames seen and the poses passed through."""
+    seen = []; start = q.pose; keys = {q.render_key()}
+    for _ in range(90):
+        t += dt; q.step(dt, t, 1920, 1080); seen.append(q.pose); keys.add(q.render_key())
+        if q.pose not in (start, "settle"): break
+    via = [p for i, p in enumerate(seen) if i == 0 or p != seen[i - 1]]
+    hold.keys = len(keys)                     # start, settle, end: three drawings
+    return seen.count("settle"), [p for p in via if p != start], t
+q = fresh_pet(); q.present_until = 1e9; q.next_talk = q.next_roam = q.next_graze = 1e9
+t = run_pet(q, 1, 0.0)
+q.snooze_until = 1e9
+down, via_down, t = hold(q, t); keys_down = hold.keys
+q.snooze_until = 0.0
+up, via_up, t = hold(q, t); keys_up = hold.keys
+q.snooze_until = 1e9; t = run_pet(q, 1, t); lying = q.pose == "rest"
+q.say(None, "a word", 3.0, t); word, via_word, t = hold(q, t)
+q.head = q.text = None; q.pause = 0; t = run_pet(q, 1, t); lying2 = q.pose == "rest"
+q.snooze_until = 0.0; q.present_until = 0.0        # away, not snoozed: a walk may fire
+q.next_roam = 0; walk, via_walk, t = hold(q, t)
+t = run_pet(q, 0.1, t); walked = q.mode == "out" and q.pose == "stand"
+ck("47 settle frame held ~150ms both ways; a word and a walk get up through it",
+   4 <= down <= 6 and via_down == ["settle", "rest"] and 4 <= up <= 6 and via_up == ["settle", "stand"]
+   and lying and 4 <= word <= 6 and via_word == ["settle", "stand"] and lying2 and 4 <= walk <= 6
+   and via_walk == ["settle", "stand"] and walked and keys_down == 3 and keys_up == 3,
+   "down: %d frames via %s, %d keys; up: %d via %s, %d keys; word: %d via %s; walk: %d via %s then %s" % (
+       down, via_down, keys_down, up, via_up, keys_up, word, via_word, walk, via_walk,
+       "walking" if walked else "NOT walking"))
+# Cud. Lying down, the jaw moves at a whitetail's real rate -- 78-93 chews a
+# minute -- in bouts of about forty with a pause between boluses; standing, it
+# never moves; and every chew changes the render key, or it never draws.
+q = fresh_pet(); q.present_until = 1e9; q.snooze_until = 1e9; q.next_talk = q.next_roam = 1e9
+t = run_pet(q, 2, 0.0); assert q.pose == "rest"
+chews = []; changes = 0; k = q.render_key(); was = q.chew; gaps = []; last = None
+for i in range(int(600 / .033)):
+    t += .033; q.step(.033, t, 1920, 1080)
+    if q.render_key() != k: changes += 1; k = q.render_key()
+    if q.chew and not was:
+        chews.append(t)
+        if last is not None: gaps.append(t - last)
+        last = t
+    was = q.chew
+inbout = [g for g in gaps if g < 2]; pauses = [g for g in gaps if g >= 2]
+rate = 60 / statistics.mean(inbout) if inbout else 0
+q.snooze_until = 0.0; t = run_pet(q, 1, t); standing_chews = 0
+for i in range(int(60 / .033)):
+    t += .033; q.step(.033, t, 1920, 1080); standing_chews += q.chew
+ck("49 cud: real chew rate in bouts with pauses, only lying down, every chew drawn",
+   70 <= rate <= 100 and len(pauses) >= 5 and all(4 <= p <= 12 for p in pauses)
+   and changes >= 2 * len(chews) - 2 and standing_chews == 0 and q.pose == "stand",
+   "10 min lying: %d chews at %.0f/min, %d pauses of %.0f-%.0fs, %d key changes; standing 1 min: %d chews" % (
+       len(chews), rate, len(pauses), min(pauses) if pauses else 0, max(pauses) if pauses else 0, changes, standing_chews))
 # Cadence. Two speeds and a decay, all from tools/exhaust.py. A fresh user at
 # the default has every fundamental inside roughly a hundred minutes of
 # presence (300 s, ~21 utterances at 15% chatter); after that the gap between

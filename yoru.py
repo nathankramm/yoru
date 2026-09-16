@@ -299,13 +299,18 @@ GAIT = [
 BOB = [0, -1, 0, -1]
 
 
-def _leg(out, ax, d1, d2, col, hoof, lift=0):
+def _leg(out, ax, d1, d2, col, hoof, lift=0, floor=17):
+    """Rows 18-23 below the body's last row, `floor`. A body that has come
+    down over the legs hides their tops; drawing them anyway puts four
+    coat-coloured stripes through the belly."""
     for y in range(18, 21):
         for i in range(2):
-            out.append((ax + d1 + i, y + lift, col))
+            if y > floor:
+                out.append((ax + d1 + i, y + lift, col))
     for y in range(21, 23):
         for i in range(2):
-            out.append((ax + d2 + i, y + lift, col))
+            if y > floor:
+                out.append((ax + d2 + i, y + lift, col))
     for i in range(2):
         out.append((ax + d2 + i, 23 + lift, hoof))
 # A bound is not a faster trot. The legs pair up front and back and the whole
@@ -334,6 +339,29 @@ GRAZE_SHIFT = (2, 4)
 # from the standing animal, and he has to stay recognisably the same one.
 REST_SHIFT = (0, 5)
 REST_HEAD = (-2, 7)
+# One frame between the two, used going down and getting up, the same
+# four-frame trick the bound uses rather than a tween: head already pulled
+# back, body two rows down of the five, and the legs bent under it -- hind
+# folding forward at the hock, fore folding back at the knee -- with only
+# what shows below the body drawn. Without it the change is a teleport,
+# and it is the one moment the user is watching, because it is what
+# confirms the middle click took.
+SETTLE_SHIFT = (0, 2)
+SETTLE_HEAD = (-2, 4)
+SETTLE_LEGS = dict(r1=0, r2=1, f1=0, f2=-1)
+SETTLE_SECS = 0.15
+
+
+# Cud. A bedded deer chews, and it is the motion that keeps the pose from
+# reading as a frozen frame. The lower jaw is one row of the head; a chew
+# slides it one pixel forward, so the throat pixel goes and a chin pixel
+# comes -- lateral, the way a ruminant's jaw moves, never the mouth
+# opening, which would read as speech. A whitetail chews a bolus 40-55
+# times at 78-93 a minute, then swallows and brings up the next: so, a
+# bout of about forty chews at a real rate, a pause, again.
+CHEW_PERIOD = 0.75
+CHEW_BOUT = (36, 44)
+CHEW_PAUSE = (5, 10)
 
 
 def _folded_legs(out):
@@ -346,20 +374,24 @@ def _folded_legs(out):
 REST_HOOF = _rest_hoof()
 
 
-def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False):
+def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False, chew=0):
     out = []
     gait = BOUND if bound else GAIT
     near, far = gait[frame], gait[(frame + 2) % 4]
     grazing, resting = pose == "graze", pose == "rest"
+    settling = pose == "settle"
+    if settling:
+        near = far = SETTLE_LEGS
     # In a bound the animal leaves the ground, so the legs rise with the body;
     # lifting the body alone just severs them. Lying down there is nothing
     # to bob: he sits on the ground line whatever frame the gait is on.
     lift = near.get("lift", 0) if bound else 0
-    bob = 0 if resting else (0 if bound else BOB[frame]) + lift
+    bob = 0 if resting or settling else (0 if bound else BOB[frame]) + lift
+    floor = 17 + SETTLE_SHIFT[1] if settling else 17
 
     if not resting:
-        _leg(out, 6, far["r1"], far["r2"], FAR, FAR_HOOF, lift)
-        _leg(out, 10, far["f1"], far["f2"], FAR, FAR_HOOF, lift)
+        _leg(out, 6, far["r1"], far["r2"], FAR, FAR_HOOF, lift, floor)
+        _leg(out, 10, far["f1"], far["f2"], FAR, FAR_HOOF, lift, floor)
 
     for y, row in enumerate(BODY):
         for x, ch in enumerate(row):
@@ -371,6 +403,12 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False):
                 dx, dy = GRAZE_SHIFT
             elif resting:
                 dx, dy = REST_HEAD if y <= 11 else REST_SHIFT
+                if chew and y == 9:
+                    dx += 1                    # the jaw slides forward
+            elif settling:
+                dx, dy = SETTLE_HEAD if y <= 11 else SETTLE_SHIFT
+            # The head is still lying down; the ear is not. A bedded deer's
+            # ears are never lowered and move constantly.
             if ear and not grazing and y == 6 and x == 14:
                 out.append((x + dx - 1, y + bob + dy - 1, col))   # ear pricks up and back
             out.append((x + dx, y + bob + dy, col))
@@ -378,7 +416,7 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False):
     # A raised tail is the real signal a deer gives. Add to it, don't move it,
     # or the rump grows a gap.
     if tail and not grazing:
-        _, dy = REST_SHIFT if resting else (0, 0)
+        _, dy = REST_SHIFT if resting else SETTLE_SHIFT if settling else (0, 0)
         for x in range(2):
             out.append((x, 10 + bob + dy, PAL["c"]))
             out.append((x, 11 + bob + dy, PAL["c"]))
@@ -386,8 +424,8 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False):
     if resting:
         _folded_legs(out)
     else:
-        _leg(out, 3, near["r1"], near["r2"], PAL["b"], HOOF, lift)
-        _leg(out, 13, near["f1"], near["f2"], PAL["b"], HOOF, lift)
+        _leg(out, 3, near["r1"], near["r2"], PAL["b"], HOOF, lift, floor)
+        _leg(out, 13, near["f1"], near["f2"], PAL["b"], HOOF, lift, floor)
     return out
 
 
@@ -1104,6 +1142,17 @@ class Pet:
         self.pose = "stand"
         self.next_graze = random.uniform(25, 70)
         self.graze_for = 0.0
+        # The frame between standing and lying: where it is going, how
+        # long it has left, and whether something (a walk) needs him up
+        # regardless of the snooze that would keep him down.
+        self.settle_to = "stand"
+        self.settle_for = 0.0
+        self.rouse = False
+        # Cud: jaw forward or not, time to the next change, chews left in
+        # the bout (0 between boluses).
+        self.chew = False
+        self.next_chew = 0.0
+        self.chews_left = 0
         self.ear = 0.0
         self.next_ear = random.uniform(4, 12)
         self.tail = 0.0
@@ -1266,7 +1315,11 @@ class Pet:
         save_json(KNOWN, sorted(self.known))
 
     def say(self, head, text, secs, now):
-        self.pose = "stand"          # head up before he says anything
+        # Head up before he says anything. Off the ground too, but that
+        # goes through the settle frame in step(): text is set here, and
+        # a deer with something to say is never one who wants to lie down.
+        if self.pose == "graze":
+            self.pose = "stand"
         self.graze_for = 0.0
         self.head, self.text = head, text
         self.text_until = now + secs
@@ -1319,18 +1372,32 @@ class Pet:
         # ends -- and, like grazing, before he speaks or walks. Not gated
         # on --still: it is a pose, not a movement. Hidden he is never
         # stepped at all, so hidden he never lies down either.
-        rest = ((self.snoozing(now) or not self.present(now))
-                and self.mode == "home" and not self.text and self.pause <= 0)
-        if rest and self.pose != "rest":
-            self.pose = "rest"
+        #
+        # Both ways go through one held frame, the settle, or the change is
+        # a teleport. Its destination can flip mid-hold (a second middle
+        # click 100ms after the first) and it simply lands on the new one.
+        want = "rest" if ((self.snoozing(now) or not self.present(now))
+                          and self.mode == "home" and not self.text
+                          and self.pause <= 0 and not self.rouse) else "stand"
+        if self.pose == "settle":
+            self.settle_to = want
+            self.settle_for -= dt
+            if self.settle_for <= 0:
+                self.pose = want
+        elif want == "rest" and self.pose != "rest":
+            self.pose, self.settle_to, self.settle_for = "settle", "rest", SETTLE_SECS
             self.graze_for = 0.0
-        elif self.pose == "rest" and not rest:
-            self.pose = "stand"
+        elif want == "stand" and self.pose == "rest":
+            self.pose, self.settle_to, self.settle_for = "settle", "stand", SETTLE_SECS
+        if self.pose == "stand":
+            self.rouse = False
         resting = self.pose == "rest"
 
         # A motionless deer reads as crashed; a blinking one reads as
         # asleep. So the blink never stops, and lying down it slows: the
-        # lids stay shut longer and the ear and tail go half as often.
+        # lids stay shut longer and the tail goes half as often. The ear
+        # goes a little more often -- bedded deer stay alert, and the ears
+        # never stop -- but the head itself stays where it is.
         self.blink -= dt
         self.next_blink -= dt
         if self.next_blink <= 0:
@@ -1341,7 +1408,27 @@ class Pet:
         self.next_ear -= dt
         if self.next_ear <= 0:
             self.ear = 0.25
-            self.next_ear = random.uniform(4, 14) * (2 if resting else 1)
+            self.next_ear = random.uniform(3, 11) if resting else random.uniform(4, 14)
+
+        # Cud, only lying down. The rhythm is regular inside a bout and
+        # the bouts are not, so he never looks like a metronome.
+        if resting:
+            self.next_chew -= dt
+            if self.next_chew <= 0:
+                if self.chews_left > 0:
+                    self.chew = not self.chew
+                    self.chews_left -= 1
+                    self.next_chew = CHEW_PERIOD / 2
+                    if self.chews_left == 0:
+                        self.chew = False
+                        self.next_chew = random.uniform(*CHEW_PAUSE)
+                else:
+                    self.chews_left = 2 * random.randint(*CHEW_BOUT)
+                    self.next_chew = 0.0
+        elif self.chew or self.chews_left:
+            self.chew = False
+            self.chews_left = 0
+            self.next_chew = 0.0
 
         self.tail -= dt
         self.next_tail -= dt
@@ -1357,7 +1444,7 @@ class Pet:
                 self.graze_for = 0.0
                 self.pose = "stand"
         elif (self.mode == "home" and not self.text and self.pause <= 0
-              and not self.still and not resting):
+              and not self.still and self.pose == "stand"):
             self.next_graze -= dt
             if self.next_graze <= 0:
                 self.pose = "graze"
@@ -1400,16 +1487,27 @@ class Pet:
         if self.mode == "home":
             if self.still:
                 return
+            if self.snoozing(now):
+                return          # told to be quiet for an hour: he stays down
             self.next_roam -= dt
             if self.next_roam <= 0:
+                if self.pose != "stand":
+                    # Head up, or up off the ground, before he moves. The
+                    # walk waits the one settle frame; rouse overrides the
+                    # "nobody here" that would otherwise keep him down --
+                    # nobody told him to stop, and a deer that never moves
+                    # for an hour isn't right either.
+                    self.rouse = True
+                    if self.pose == "graze":
+                        self.pose = "stand"
+                        self.graze_for = 0.0
+                    return
                 span = min(width * 0.45, 520)
                 self.target = max(4, min(
                     self.home_x + random.uniform(-span, span), width - self.w - 4))
                 # A walk only moves x. If y is off the surface he would walk
                 # past unseen, so bring it in before he sets off.
                 self.y = max(4, min(self.y, height - self.h - 4))
-                self.pose = "stand"          # head comes up before he moves
-                self.graze_for = 0.0
                 # One trip in five he spooks himself and bounds it, tail up.
                 if random.random() < 0.2:
                     self.speed, self.tail = 150.0, 1.4
@@ -1454,6 +1552,8 @@ class Pet:
                 why = " for %.0fs" % self.graze_for
             elif self.pose == "rest":
                 why = " (snoozed)" if self.snoozing(now) else " (away)"
+            elif self.pose == "settle":
+                why = " -> %s" % self.settle_to
             elif self.text:
                 why = " (speaking)"
             elif self.mode != "home":
@@ -1470,6 +1570,7 @@ class Pet:
         and between a blink, an ear and a tail, most frames haven't."""
         return (int(self.x), int(self.y), self.dir, self.frame(), self.pose,
                 self.blink > 0, self.ear > 0, self.tail > 0, self.bounding(),
+                self.chew,
                 self.head, self.text)
 
     def frame(self):
@@ -1836,7 +1937,7 @@ def draw_sprite(cr, pet, oy):
     px, flip = pet.px, pet.dir < 0
     pts = pixels(pet.frame(), pet.blink > 0, pet.pose,
                  1 if pet.ear > 0 else 0, 1 if pet.tail > 0 else 0,
-                 pet.bounding())
+                 pet.bounding(), pet.chew)
 
     def sx(x):
         return pet.x + ((SW - 1 - x) if flip else x) * px

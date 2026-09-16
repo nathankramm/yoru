@@ -307,8 +307,16 @@ one in five, he spooks himself and bounds instead, tail flagged. None of it
 does anything. It's just him.
 
 Snoozed, or once you've been away long enough to count as gone, he lies down:
-legs folded under, head up, still blinking. He gets up when the hour is over
-or you come back, and before he says or does anything else. That pose is the
+legs folded under, head pulled back. He blinks, his ears keep going the way a
+bedded deer's do, and he chews — a bolus at a whitetail's real rate, a pause,
+the next — because that's what a bedded deer is doing, and it's what stops the
+pose reading as a frozen frame. Snoozed, he stays down: you told him to be
+quiet for an hour. Merely away, he still gets up for the odd walk and lies
+back down. He gets up when the hour is over or you come back, and before he
+says or does anything else. Both ways go through one held frame — head back,
+body partway down, legs bent — the same trick as the bound; without it the
+change is a teleport, and it's the moment you're watching, since it's what
+confirms the middle click took. That pose is the
 only visible sign of either state — without it, the one way to check a
 middle click had taken was to middle click again, which undid it. `--still`
 keeps the pose; it's not movement.

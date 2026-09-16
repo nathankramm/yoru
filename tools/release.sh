@@ -138,10 +138,10 @@ echo "   .PKGINFO says $pkgver; usr/bin/yoru --version says '$binver'"
 step "Commit the packaging files (not pushed)"
 if ((dry)); then
   echo "   (dry run) would: git commit PKGBUILD .SRCINFO -m 'Package $version'"
-  printf '\nDry run for %s passed every check. Artefacts in %s\n' "$tag" "$work"
+  printf '\nDry run for %s passed every check. Artifacts in %s\n' "$tag" "$work"
 else
   git add PKGBUILD .SRCINFO
   git commit -q -m "Package $version"
   echo "   $(git log -1 --format='%h %s')"
-  printf '\nReleased %s. Left for you: git push origin main; the AUR.\nArtefacts in %s\n' "$tag" "$work"
+  printf '\nReleased %s. Left for you: git push origin main; the AUR.\nArtifacts in %s\n' "$tag" "$work"
 fi

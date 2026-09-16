@@ -33,12 +33,12 @@ Yoru is built against that autopsy, point by point.
 | Talked to an empty chair | Detects idle and stops spending tips when you're gone |
 | Was "patronizing" to experts | Teaches keybindings — skills you keep — rather than doing things for you |
 
-That turn-away behaviour isn't a flourish. Rickenberg and Reeves found that an
+That turn-away behavior isn't a flourish. Rickenberg and Reeves found that an
 on-screen agent which *watches* the user measurably raises anxiety and lowers
 task performance; Swartz's suggested fix is literally "turn away from the user
 when not called into service."
 
-The one thing the research said to keep: humour. Agents that joked were rated
+The one thing the research said to keep: humor. Agents that joked were rated
 *less tedious* and more likeable, with the strongest effect in the entire study
 (p < 0.00005). So he's dry, not silent.
 
@@ -115,7 +115,7 @@ Six of the 194, as `yoru --list` prints them:
 
 ```
 == windows
-  Super + K                          Every keybinding at once. Alt + K for tmux, Ctrl + K for Herdr. Nobody memorises all of them.
+  Super + K                          Every keybinding at once. Alt + K for tmux, Ctrl + K for Herdr. Nobody memorizes all of them.
   Super + W                          Close the window. No confirmation dialog. There was never going to be one.
   Super + Backspace                  Toggle transparency. Looks incredible, reads terribly. Use sparingly.
 
@@ -357,7 +357,7 @@ back — the window you came back to still gets its tip.
 ## Context awareness
 
 He reads the focused window from `hyprctl` every two seconds and matches on
-class *and* title, so tools running inside your terminal are recognised
+class *and* title, so tools running inside your terminal are recognized
 separately from the terminal itself:
 
 | Focused | He talks about |

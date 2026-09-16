@@ -180,14 +180,14 @@ ck("26 all pose combos in bounds", not oob, oob[:2])
 # A floating pixel is a rendering fault in any pose, and a pixel-diff that
 # only looks at what was removed passes an added one happily. Every pixel of
 # every combination -- pose, gait, frame, blink, ear, tail, chew, doze,
-# parked or moving -- must have an 8-neighbour in the sprite, and the sprite
+# parked or moving -- must have an 8-neighbor in the sprite, and the sprite
 # must be one piece. Parked he does not bob; walking he is level with one
 # foot in the air, knee bent; trotting, the body rises a row on frames 1 and
 # 3 and the legs lengthen to meet it; bounding, the legs lift with the body.
 # So every frame is one piece. It was five, parked and
 # on the trot's pass frames, from the first commit until the bob stopped
 # applying to a standing animal.
-def neighbours(p, pts):
+def neighbors(p, pts):
     return [(p[0] + dx, p[1] + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
             if (dx or dy) and (p[0] + dx, p[1] + dy) in pts]
 def components(pts):
@@ -196,7 +196,7 @@ def components(pts):
         if p in seen: continue
         n += 1; stack = [p]; seen.add(p)
         while stack:
-            for q in neighbours(stack.pop(), pts):
+            for q in neighbors(stack.pop(), pts):
                 if q not in seen: seen.add(q); stack.append(q)
     return n
 lonely = []; pieces = collections.Counter(); combos = 0
@@ -210,7 +210,7 @@ for pose in ("stand", "graze", "rest", "settle"):
                             for blink in (False, True):
                                 combos += 1
                                 pts = {(x, y) for x, y, _ in m.pixels(f, blink, pose, e, tl, g, chew, doze)}
-                                lonely += [(pose, g, f, p) for p in pts if not neighbours(p, pts)]
+                                lonely += [(pose, g, f, p) for p in pts if not neighbors(p, pts)]
                                 pieces[(pose, g or "parked", f, components(pts))] += 1
 multi = sorted({(pose, g, f, n) for (pose, g, f, n), _ in pieces.items() if n > 1})
 # parked he must not bob at all: the body (rows 0-17) sits where frame 0's
@@ -667,10 +667,10 @@ corners_ok = faces == dict(br=1, tr=1, bl=-1, tl=-1)
 q = parked(corner="br"); q.home_x = q.x = 200; q.face_open(1920); q.step(.033, 1.0, 1920, 1080); dragged = q.dir
 q.say(None, "hi", 3.0, 1.0); q.step(.033, 1.033, 1920, 1080); spoke = q.dir
 q.head = q.text = None; q.pause = 0; q.step(.033, 1.066, 1920, 1080); quiet = q.dir
-c = parked(corner="br"); centre = (1920 - c.w) / 2
-c.home_x = c.x = centre - 200; c.face_open(1920); before = c.dir            # clearly left of centre: faces right
-c.home_x = c.x = centre + 30; c.face_open(1920); c.step(.033, 2.0, 1920, 1080); small = c.dir   # 30px past centre: keeps it
-c.home_x = c.x = centre + 200; c.face_open(1920); c.step(.033, 2.033, 1920, 1080); big = c.dir  # a body past: turns
+c = parked(corner="br"); center = (1920 - c.w) / 2
+c.home_x = c.x = center - 200; c.face_open(1920); before = c.dir            # clearly left of center: faces right
+c.home_x = c.x = center + 30; c.face_open(1920); c.step(.033, 2.0, 1920, 1080); small = c.dir   # 30px past center: keeps it
+c.home_x = c.x = center + 200; c.face_open(1920); c.step(.033, 2.033, 1920, 1080); big = c.dir  # a body past: turns
 r = parked(corner="br"); r.home_x = r.x = 700; r.face_open(1920); r.step(.033, 3.0, 1920, 1080); wide = r.dir   # 696 left, 1120 right
 r.step(.033, 3.033, 1000, 1080); shrunk = r.dir                                                  # now 696 left, 200 right
 walks = parked(corner="br"); walks.next_roam = 0; walks.step(.033, 4.0, 1920, 1080); walks.step(.033, 4.033, 1920, 1080)
@@ -678,7 +678,7 @@ walk_dir = walks.dir if walks.mode == "out" else 0
 ck("54 he faces the near edge: into the corner from every corner, after a drag, after a refit; no flip on a small drag; speaks inward; walks out",
    corners_ok and dragged == -1 and spoke == 1 and quiet == -1 and before == -1 and small == -1 and big == 1
    and wide == -1 and shrunk == 1 and walk_dir == -1,
-   "corners %s; dragged to x=200 -> %d, speaking %d, quiet again %d; centre-200 -> %d, +30 past centre -> %d, +200 -> %d; "
+   "corners %s; dragged to x=200 -> %d, speaking %d, quiet again %d; center-200 -> %d, +30 past center -> %d, +200 -> %d; "
    "x=700 on 1920 -> %d, surface to 1000 -> %d; from br he walks %s" % (
        faces, dragged, spoke, quiet, before, small, big, wide, shrunk, {-1: "left, into the room", 1: "RIGHT", 0: "NOT AT ALL"}[walk_dir]))
 # Cadence. Two speeds and a decay, all from tools/exhaust.py. A fresh user at

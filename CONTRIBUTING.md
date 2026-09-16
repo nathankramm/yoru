@@ -29,7 +29,7 @@ python3 yoru.py --list | grep -c "^  "     # count
 python3 yoru.py --ask <keyword>            # find it
 ```
 
-## Behaviour changes
+## Behavior changes
 
 This project has an explicit design position, taken from the research in the
 README. Pull requests that make Yoru more talkative, harder to dismiss, or more

@@ -339,7 +339,7 @@ def _leg(out, ax, d1, d2, col, hoof, lift=0, top=18, floor=None, up=0):
     as a seam. `up` is a foot in the air: the lower leg and hoof rise
     that many rows, the upper stays, so the knee bends. A body that has
     come down over the legs (`floor`) hides their tops; drawing them
-    anyway puts four coat-coloured stripes through the belly."""
+    anyway puts four coat-colored stripes through the belly."""
     for y in range(top, 21):
         for i in range(2):
             if floor is None or y > floor:
@@ -373,7 +373,7 @@ GRAZE_SHIFT = (2, 4)
 # "settled" is the head: pulled back three and down one, so the neck rows
 # disappear into the shoulders and the muzzle sits over the chest instead
 # of ahead of it. The body itself is left alone -- this is a transition
-# from the standing animal, and he has to stay recognisably the same one.
+# from the standing animal, and he has to stay recognizably the same one.
 REST_SHIFT = (0, 5)
 REST_HEAD = (-2, 7)
 # One frame between the two, used going down and getting up, the same
@@ -533,7 +533,7 @@ AGENT = TERM + ("org.omarchy.agent", "opencode", "claude", "codex", "crush")
 # tools/README.md says where to look, per topic.
 KNOWLEDGE = [
     # ---------------------------------------------------------- windows ----
-    ("windows", None, "Super + K", "Every keybinding at once. Alt + K for tmux, Ctrl + K for Herdr. Nobody memorises all of them."),
+    ("windows", None, "Super + K", "Every keybinding at once. Alt + K for tmux, Ctrl + K for Herdr. Nobody memorizes all of them."),
     ("windows", None, "Super + Space", "The Omarchy menu. Almost everything starts here, which is the point of it."),
     ("windows", None, "Super + Alt + Space", "The apps menu, for when you already know what you want."),
     ("windows", None, "Super + Escape", "Lock, suspend, hibernate, log out, reboot, shut down. Screensaver, if you want a show."),
@@ -557,7 +557,7 @@ KNOWLEDGE = [
     ("windows", None, "Super + Left Mouse", "Drag the window around. Super + Right Mouse resizes it."),
     ("windows", None, "Super + Ctrl + Z", "Zoom into the screen, repeatedly. Ctrl + Alt + Z admits defeat and zooms out."),
     ("windows", None, "Super + /", "Step through monitor scaling. Super + Alt + / steps back."),
-    ("windows", None, "Alt + Tab", "Cycle windows here. Ctrl + Alt + Tab cycles monitors. Old habits, honoured."),
+    ("windows", None, "Alt + Tab", "Cycle windows here. Ctrl + Alt + Tab cycles monitors. Old habits, honored."),
     ("windows", None, "Super + Backspace", "Toggle transparency. Looks incredible, reads terribly. Use sparingly."),
     ("windows", None, "Super + Shift + Backspace", "Toggle window gaps. Gaps are taste, not function. Have taste anyway."),
     ("windows", None, "Super + Ctrl + Backspace", "Toggle single-window square aspect. A lone window shouldn't span an ultrawide."),
@@ -583,7 +583,7 @@ KNOWLEDGE = [
 
     # ---------------------------------------------------------- capture ----
     ("capture", None, "Print Screen", "Screenshot. Alt + Print Screen records; press it again to stop. That's the whole thing."),
-    ("capture", None, "Super + Print Screen", "Colour picker. The value goes to the clipboard and nowhere else."),
+    ("capture", None, "Super + Print Screen", "Color picker. The value goes to the clipboard and nowhere else."),
     ("capture", None, "Super + Ctrl + Print Screen", "OCR the screen to the clipboard. Text out of a picture, no subscription required."),
     ("capture", None, "Super + Ctrl + C", "Capture menu, for keyboards with no Print Screen key."),
     ("capture", None, "Super + Alt + [", "Shrinks the webcam overlay while recording. ] grows it."),
@@ -646,7 +646,7 @@ KNOWLEDGE = [
     ("setup", None, "Dual boot", "Quattro installs into free space beside Windows, LUKS and all."),
 
     # -------------------------------------------------------------- cli ----
-    ("cli", TERM, "omarchy", "The command centre. Run it bare to see every group. It will not judge you for looking."),
+    ("cli", TERM, "omarchy", "The command center. Run it bare to see every group. It will not judge you for looking."),
     ("cli", TERM, "omarchy update", "Packages, snapshot and migrations in one move. The snapshot is the part that matters."),
     ("cli", TERM, "omarchy theme list", "Then omarchy theme set <name>. omarchy font list does fonts."),
     ("cli", TERM, "omarchy commands --all", "Every subcommand there is. --json if something else is reading."),
@@ -906,7 +906,7 @@ _OWN_CALL = re.compile(
 
 
 def _own_key(keys):
-    """(mods, KEY) the way the verifier normalises, or None if it isn't a
+    """(mods, KEY) the way the verifier normalizes, or None if it isn't a
     plain key string. Built keys like 'SUPER + ' .. key never match the
     regex, so they are already gone by here."""
     parts = [p.strip() for p in keys.split("+")]
@@ -953,7 +953,7 @@ def own_bind_tips(path=OWN_BINDS, knowledge=None):
             src = "".join(l for l in fh if not l.lstrip().startswith("--"))
     except (OSError, UnicodeDecodeError):
         return [], {}
-    headline = {}                   # normalised key -> curated tip
+    headline = {}                   # normalized key -> curated tip
     for t in knowledge:
         parsed = parse_keys(t[2])
         if parsed:
@@ -1317,7 +1317,7 @@ class Pet:
         turns back when he parks, which is what an animal does: it moves
         facing the open and settles facing its cover. Within a body width
         of equidistant he keeps the way he last faced: a deer parked at
-        the bottom centre must not flip on a pixel of drag."""
+        the bottom center must not flip on a pixel of drag."""
         left, right = self.room(width, -1), self.room(width, 1)
         if abs(left - right) >= self.w:
             self.open = 1 if left < right else -1

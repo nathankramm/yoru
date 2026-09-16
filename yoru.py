@@ -353,13 +353,14 @@ SETTLE_SECS = 0.15
 
 
 # Cud. A bedded deer chews, and it is the motion that keeps the pose from
-# reading as a frozen frame. The lower jaw is one row of the head; a chew
-# is one pixel of chin ahead of it, under the muzzle, moving between two
-# places -- lateral, the way a ruminant's jaw moves, never the mouth
-# opening, which would read as speech, and never the row itself, whose
-# rear pixel is the neck line on the pulled-back head. A jaw that moves
-# between two places reads as motion; one that appears and disappears
-# reads as a light.
+# reading as a frozen frame. The lower jaw is one row of the head, ending
+# at x=18 on the resting head; a chew is one pixel of chin at 19, ahead
+# of it and under the muzzle, and nothing else -- lateral, the way a
+# ruminant's jaw moves, never the mouth opening, which would read as
+# speech, and never the row itself, whose rear pixel is the neck line on
+# the pulled-back head. A second chin position at 20 was tried: it hangs
+# from the muzzle tip with a notch in the jaw line and reads as a
+# detached pixel. Anything that continues the jaw row is 19.
 #
 # The real numbers: a whitetail chews a bolus 40-55 times at 78-93 a
 # minute, then swallows and brings up the next. What is shown is
@@ -367,7 +368,7 @@ SETTLE_SECS = 0.15
 # seconds is exactly a blinking status light, so each chew gets its own
 # interval around the real mean, the bouts are short -- ten seconds or
 # so -- and the stillness between them is longer than the chewing.
-CHEW_STEP = (0.28, 0.50)      # half a chew, jittered: 0.56-1.0s a chew
+CHEW_STEP = (0.28, 0.50)      # chin out or in, jittered: 0.56-1.0s a chew
 CHEW_BOUT = (8, 14)           # chews per bout
 CHEW_PAUSE = (10, 20)         # seconds between bouts
 # Dozing. Bedded deer sleep far less than they lie down (Woods), and when
@@ -424,12 +425,12 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False, chew=0, doze=
             elif resting:
                 dx, dy = REST_HEAD if y <= 11 else REST_SHIFT
                 if chew and y == 9 and x == 20:
-                    # The chin: one or two pixels ahead of the jaw's front
-                    # end. Added, not slid: sliding the row also took its
-                    # rear pixel, which on the pulled-back head is the
-                    # throat at the head/neck junction, and the neck
-                    # twitched once a second.
-                    out.append((x + dx + chew, y + bob + dy, col))
+                    # The chin, one pixel ahead of the jaw's front end.
+                    # Added, not slid: sliding the row also took its rear
+                    # pixel, which on the pulled-back head is the throat
+                    # at the head/neck junction, and the neck twitched
+                    # once a second.
+                    out.append((x + dx + 1, y + bob + dy, col))
             elif settling:
                 dx, dy = SETTLE_HEAD if y <= 11 else SETTLE_SHIFT
             # The head is still lying down; the ear is not. A bedded deer's
@@ -1173,8 +1174,8 @@ class Pet:
         self.settle_to = "stand"
         self.settle_for = 0.0
         self.rouse = False
-        # Cud: where the chin is (0 tucked, 1 or 2 pixels forward), time
-        # to its next move, and moves left in the bout (0 between bouts).
+        # Cud: chin out or not, time to its next move, and moves left in
+        # the bout (0 between bouts).
         self.chew = 0
         self.next_chew = 0.0
         self.chews_left = 0
@@ -1465,7 +1466,7 @@ class Pet:
             self.next_chew -= dt
             if self.next_chew <= 0:
                 if self.chews_left > 0:
-                    self.chew = 2 if self.chew == 1 else 1
+                    self.chew = 0 if self.chew else 1
                     self.chews_left -= 1
                     self.next_chew = random.uniform(*CHEW_STEP)
                     if self.chews_left == 0:

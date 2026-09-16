@@ -176,6 +176,41 @@ oob = [(pose, b, f) for pose in ("stand", "graze", "rest", "settle") for b in (F
            or min(z[1] for z in q) < -4 or max(z[1] for z in q) > 25)(
            m.pixels(f, False, pose, e, tl, b))]
 ck("26 all pose combos in bounds", not oob, oob[:2])
+# A floating pixel is a rendering fault in any pose, and a pixel-diff that
+# only looks at what was removed passes an added one happily. Every pixel of
+# every combination -- pose, gait, frame, blink, ear, tail, chew, doze -- must
+# have an 8-neighbour in the sprite. The component count is reported, not
+# asserted: the parked frames (BOB lifts the body a row off straight legs)
+# have been five pieces since the first commit.
+def neighbours(p, pts):
+    return [(p[0] + dx, p[1] + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+            if (dx or dy) and (p[0] + dx, p[1] + dy) in pts]
+def components(pts):
+    seen = set(); n = 0
+    for p in pts:
+        if p in seen: continue
+        n += 1; stack = [p]; seen.add(p)
+        while stack:
+            for q in neighbours(stack.pop(), pts):
+                if q not in seen: seen.add(q); stack.append(q)
+    return n
+lonely = []; pieces = collections.Counter(); combos = 0
+for pose in ("stand", "graze", "rest", "settle"):
+    for b in (False, True):
+        for f in range(4):
+            for e in (0, 1):
+                for tl in (0, 1):
+                    for chew in (0, 1):
+                        for doze in (0, 1):
+                            for blink in (False, True):
+                                combos += 1
+                                pts = {(x, y) for x, y, _ in m.pixels(f, blink, pose, e, tl, b, chew, doze)}
+                                lonely += [(pose, f, p) for p in pts if not neighbours(p, pts)]
+                                pieces[(pose, f, components(pts))] += 1
+multi = sorted({(pose, f, n) for (pose, f, n), _ in pieces.items() if n > 1})
+ck("51 no floating pixel in any pose", not lonely,
+   "%d combinations, floating: %s; more than one piece: %s" % (combos, lonely[:3] or "none",
+   ", ".join("%s frame %d -> %d" % x for x in multi) or "none"))
 # Tips generated from the user's own bindings.lua replace the curated tip for
 # a key the user rebound and add the rest. Afterwards no key may be covered
 # twice and every id must be unique. Run against the real file when there is
@@ -486,31 +521,37 @@ ck("47 settle frame held ~150ms both ways; a word and a walk get up through it",
 q = fresh_pet(); q.present_until = 1e9; q.snooze_until = 1e9; q.next_talk = q.next_roam = 1e9
 t = run_pet(q, 2, 0.0); assert q.pose == "rest"
 q.next_doze = 1e9                                    # awake throughout: the cud rhythm alone (50 has the doze)
-chews = []; changes = 0; k = q.render_key(); was = q.chew; gaps = []; last = None; bouts = []; run = 0; mid_bout = bool(q.chew)
+chews = []; changes = 0; k = q.render_key(); was = q.chew; gaps = []; last = None; mid_bout = q.chews_left > 0
 for i in range(int(600 / .033)):
     t += .033; q.step(.033, t, 1920, 1080)
     if q.render_key() != k: changes += 1; k = q.render_key()
-    if q.chew and not was: run = 0
-    if q.chew == 1 and was != 1: run += 1
-    if not q.chew and was: bouts.append(run)
     if q.chew == 1 and was != 1:
         chews.append(t)
         if last is not None: gaps.append(t - last)
         last = t
     was = q.chew
-if mid_bout: bouts = bouts[1:]                       # a bout the loop joined partway is not a bout
+bouts = [1]                                          # chews split into bouts by the stills between
+for g in gaps:
+    if g >= 2: bouts.append(1)
+    else: bouts[-1] += 1
+bouts = bouts[1:-1] if mid_bout else bouts[:-1]      # neither a bout joined partway nor one cut off
 inbout = [g for g in gaps if g < 2]; pauses = [g for g in gaps if g >= 2]
 rate = 60 / statistics.mean(inbout) if inbout else 0
 jitter = statistics.pstdev(inbout) if len(inbout) > 1 else 0
 q.snooze_until = 0.0; t = run_pet(q, 1, t); standing_chews = 0
 for i in range(int(60 / .033)):
     t += .033; q.step(.033, t, 1920, 1080); standing_chews += q.chew
-ck("49 cud: short jittered bouts near the real rate, long stills, only lying down, every move drawn",
-   60 <= rate <= 100 and jitter >= 0.05 and len(pauses) >= 10 and all(9 <= p <= 22 for p in pauses)
+# The chin must continue the jaw row, not hang off the muzzle: row 16 of the
+# resting head is one unbroken run whether the chin is out or in.
+def runs(pts, y):
+    xs = sorted(x for x, yy in pts if yy == y); return sum(1 for a, b in zip(xs, xs[1:]) if b != a + 1) + 1
+jaw = [runs({(x, y) for x, y, _ in m.pixels(1, False, "rest", chew=c)}, 16) for c in (0, 1)]
+ck("49 cud: short jittered bouts near the real rate, long stills, only lying down, every move drawn, chin on the jaw",
+   jaw == [1, 1] and 60 <= rate <= 100 and jitter >= 0.05 and len(pauses) >= 10 and all(9 <= p <= 22 for p in pauses)
    and bouts and all(8 <= b <= 14 for b in bouts) and changes >= 2 * len(chews) - 2
    and standing_chews == 0 and q.pose == "stand",
-   "10 min lying: %d chews at %.0f/min (sd %.2fs), %d bouts of %d-%d chews, %d stills of %.0f-%.0fs, %d key changes; standing 1 min: %d chews" % (
-       len(chews), rate, jitter, len(bouts), min(bouts) if bouts else 0, max(bouts) if bouts else 0, len(pauses),
+   "jaw row runs chin in/out %s; 10 min lying: %d chews at %.0f/min (sd %.2fs), %d bouts of %d-%d chews, %d stills of %.0f-%.0fs, %d key changes; standing 1 min: %d chews" % (
+       jaw, len(chews), rate, jitter, len(bouts), min(bouts) if bouts else 0, max(bouts) if bouts else 0, len(pauses),
        min(pauses) if pauses else 0, max(pauses) if pauses else 0, changes, standing_chews))
 # The doze cycle, on Adams' numbers: he beds alert, then dozes 30s to a few
 # minutes, wakes briefly, dozes again, for as long as he is down. Eye shut

@@ -309,18 +309,19 @@ GRAZE_SHIFT = (2, 4)
 # Lying down is the same trick the other way about: the body drops by the
 # height of its legs less one row, so it sits on the legs folded under it,
 # and the head settles one row more, forward and down -- up enough to
-# watch, not the alert stand. The folded legs are a strip of shade along
-# the ground with the near hooves showing where a deer at rest shows them
-# from the side: one out ahead of the chest, the hind one beside the belly.
+# watch, not the alert stand. The legs themselves are not drawn. At 24x24
+# a two-pixel hoof reads as grit, and a knee or a hoof ahead of the chest
+# reads as a deer that fell over; what a couched deer shows from the side
+# is an unbroken silhouette on the ground, so that is what he shows: a
+# strip of shade along the ground line, inset a pixel at each end, and the
+# eye folds the legs under it.
 REST_SHIFT = (0, 5)
 REST_HEAD = (1, 6)
 
 
 def _folded_legs(out):
-    for x in range(3, 19):
+    for x in range(3, 15):
         out.append((x, 23, FAR))
-    for x in list(range(9, 11)) + list(range(19, 21)):
-        out.append((x, 23, HOOF))
 
 
 def pixels(frame, blink, pose="stand", ear=0, tail=0, bound=False):

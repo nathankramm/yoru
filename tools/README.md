@@ -87,6 +87,23 @@ the twenty minutes.
   release: this may quietly fix itself, and then the spaced form is the one
   the manual and the shipped agent skill already tell people to use.
 
+## render-poses.py
+
+Draws every pose — standing, grazing, the trot and bound frames, resting,
+each with its blink, ear and tail — to one PNG, with the outline halo and
+on the theme background exactly as `draw_sprite` puts them on screen.
+
+    python3 tools/render-poses.py                # built-in palette -> poses.png
+    python3 tools/render-poses.py --theme        # the live Omarchy theme
+    python3 tools/render-poses.py --zoom 16 out.png
+
+The audit proves a pose stays in bounds and that the render key moves when
+it should. Whether the pose reads as a deer at rest or a deer that fell over
+is the one thing it cannot check, and that has needed a look twice now. To
+compare candidates, replace the function under test on the loaded module
+(`m._folded_legs = candidate`) and add a cell per candidate; the resting
+pose was chosen that way, from ten.
+
 ## At the next release
 
     omarchy version                          # note it

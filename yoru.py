@@ -1219,7 +1219,11 @@ class Pet:
         self.placed = False
         self.size = None            # surface size last seen by step()
 
-        self.dir = -1
+        # Which way the open ground lies from home: away from the nearer of
+        # the left and right edges. He faces it and walks into it. One fact,
+        # set where home is set -- place, refit, drag -- and read from.
+        self.open = -1
+        self.dir = self.open
         self.speed = 0.0
         self.dist = 0.0
         self.mode = "home"          # home | out | back | drag
@@ -1251,13 +1255,12 @@ class Pet:
         self.ear = 0.0
         self.next_ear = random.uniform(4, 12)
         # The tail says two things. The wag -- casual, side to side -- is
-        # the all-clear, and it is what an idle deer does. The flag is
-        # the alarm: danger is here, and he only gives it when he has
-        # spooked himself into a bound. `tail` times the wag, `flag` the
-        # flag; tail_frame() says which is drawn.
+        # the all-clear, and it is what an idle deer does; `tail` times it.
+        # The flag is the alarm: danger is here, and a fleeing deer keeps
+        # it up for the whole flight, so it is simply the bound, for as
+        # long as the bound lasts. tail_frame() says which is drawn.
         self.tail = 0.0
         self.next_tail = random.uniform(8, 20)
-        self.flag = 0.0
         self.next_talk = random.uniform(20, 40)
         self.snooze_until = 0.0
         self.last_spoke = -999.0
@@ -1297,9 +1300,24 @@ class Pet:
             self.home_y = (height - self.h - m) if bottom else m
         self.clamp_home(width, height)
         self.x, self.y = self.home_x, self.home_y
-        self.dir = -1 if self.home_x > width / 2 else 1
+        self.face_open(width)
         self.size = (width, height)
         self.placed = True
+
+    def room(self, width, side):
+        """Pixels between home and the edge on `side` (-1 left, 1 right)."""
+        return (self.home_x - 4) if side < 0 else (width - self.w - 4) - self.home_x
+
+    def face_open(self, width):
+        """Point `open` away from the nearer edge. An animal parked against
+        cover faces the open ground, not the wall, so turning away from the
+        user is not a rule of its own but where he is standing. Within a
+        body width of equidistant he keeps the way he last faced: a deer
+        parked at the bottom centre must not flip on a pixel of drag."""
+        left, right = self.room(width, -1), self.room(width, 1)
+        if abs(left - right) >= self.w:
+            self.open = 1 if left < right else -1
+        self.dir = self.open
 
     def clamp_home(self, width, height):
         self.home_x = max(4, min(self.home_x, width - self.w - 4))
@@ -1317,6 +1335,7 @@ class Pet:
         self.y = max(4, min(self.y, height - self.h - 4))
         if self.mode in ("out", "back"):
             self.target = max(4, min(self.target, width - self.w - 4))
+        self.face_open(width)           # the other side may be the near one now
         debug("surface: %dx%d -> %dx%d; home (%d,%d) -> (%d,%d), at (%d,%d) -> (%d,%d)",
               self.size[0], self.size[1], width, height, was[0], was[1],
               self.home_x, self.home_y, was[2], was[3], self.x, self.y)
@@ -1552,7 +1571,6 @@ class Pet:
             self.next_chew = 0.0
 
         self.tail -= dt
-        self.flag -= dt
         self.next_tail -= dt
         if self.next_tail <= 0:
             self.tail = WAG_SECS
@@ -1597,16 +1615,13 @@ class Pet:
             # is literally "turn away from the user when not called into
             # service". So he grazes outward, and turns to face you only when
             # he actually has something to say.
-            inward = -1 if self.home_x > width / 2 else 1
-            self.dir = inward if self.text else -inward
+            self.dir = -self.open if self.text else self.open
 
         if self.mode == "drag":
             return
         if self.pause > 0:
             self.pause -= dt
-            if self.pause <= 0 and self.bounding():
-                self.flag = 1.4          # the flag goes up as he bolts, not
-            return                       # while he stands at the far end
+            return
 
         if self.mode == "home":
             if self.still:
@@ -1626,31 +1641,28 @@ class Pet:
                         self.pose = "stand"
                         self.graze_for = 0.0
                     return
-                # Pick the target in the room he actually has. Home is
+                # He walks the way he faces: into the open ground, away
+                # from the nearer edge, as far as that side holds. Home is
                 # usually against an edge, and a draw symmetric about it
-                # clamped to the surface made half his walks a 20px
-                # shuffle -- with a four-beat walk, a truncated cycle.
-                # Each side with room for a trip is a candidate, weighted
-                # by its room, so a corner-parked deer walks inward and a
-                # central one goes both ways; with no room either side he
-                # skips this one and tries again later.
+                # clamped to the surface made half his walks a 20px shuffle
+                # -- with a four-beat walk, a truncated cycle. With no room
+                # for a trip on the open side there is less on the other,
+                # so he skips this one and tries again later.
                 span = min(width * 0.45, 520)
-                room = {-1: self.home_x - 4, 1: (width - self.w - 4) - self.home_x}
-                sides = [d for d, r in room.items() if r >= self.min_trip()]
-                if not sides:
+                room = self.room(width, self.open)
+                if room < self.min_trip():
                     self.next_roam = random.uniform(self.roam * 0.7, self.roam * 1.6)
-                    debug("roam: no room for a trip (%dpx left, %dpx right, need %d); later",
-                          room[-1], room[1], self.min_trip())
+                    debug("roam: no room for a trip (%dpx open, need %d); later",
+                          room, self.min_trip())
                     return
-                d = random.choices(sides, weights=[room[s] for s in sides])[0]
-                self.target = self.home_x + d * random.uniform(
-                    self.min_trip(), min(span, room[d]))
+                self.target = self.home_x + self.open * random.uniform(
+                    self.min_trip(), min(span, room))
                 # A walk only moves x. If y is off the surface he would walk
                 # past unseen, so bring it in before he sets off.
                 self.y = max(4, min(self.y, height - self.h - 4))
                 # One trip in five he spooks himself and bounds it, tail up.
                 if random.random() < 0.2:
-                    self.speed, self.flag = 150.0, 1.4
+                    self.speed = 150.0
                 else:
                     self.speed = random.uniform(46, 72)
                 self.mode = "out"
@@ -1667,7 +1679,7 @@ class Pet:
                 self.mode = "back"
                 self.pause = random.uniform(1.5, 5.0)
                 if random.random() < 0.2:
-                    self.speed = 150.0       # flagged when the pause ends
+                    self.speed = 150.0
                 else:
                     self.speed = random.uniform(46, 72)
             else:
@@ -1720,9 +1732,10 @@ class Pet:
         return "bound" if self.speed > 120 else "walk"
 
     def tail_frame(self):
-        """2 for the flag, 1 for the wag's tip-on-the-flank half, else 0.
-        The wag alternates every WAG_BEAT: two swings, side to side."""
-        if self.flag > 0 and self.bounding():
+        """2 for the flag, which is the whole of a bound; 1 for the wag's
+        tip-on-the-flank half, alternating every WAG_BEAT for two swings
+        side to side; else 0. A bolting deer never wags."""
+        if self.bounding():
             return 2
         if self.tail > 0 and int((WAG_SECS - self.tail) / WAG_BEAT) % 2 == 0:
             return 1
@@ -2374,7 +2387,7 @@ def build_app(opts, tips):
             pet.home_x, pet.home_y = pet.x, pet.y
             pet.mode = "home"
             pet.next_roam = random.uniform(pet.roam * 0.7, pet.roam * 1.6)
-            pet.dir = -1 if pet.home_x > self.area.get_width() / 2 else 1
+            pet.face_open(self.area.get_width())
             state = read_state()
             state.update(x=round(pet.home_x), y=round(pet.home_y))
             debug("moved: home is now (%d, %d), saved", state["x"], state["y"])

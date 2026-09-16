@@ -300,8 +300,11 @@ model these numbers came from.
 
 ## The deer
 
-He parks facing away from your screen and turns to you only when he has
-something to say. Left alone he drops his head and grazes, his ears twitch,
+He faces the open ground — away from whichever side edge is nearer, the way an
+animal parked against cover does — which from a corner means away from your
+screen, and he turns to you only when he has something to say. His walks go
+the way he faces. Drag him to the other side and both follow; parked near the
+middle he keeps whichever way he last faced rather than flipping on a nudge. Left alone he drops his head and grazes, his ears twitch,
 and now and then his tail gives the casual side-to-side wag that is a deer's
 all-clear. His walks are a four-beat walk — one foot in the air at a time,
 three on the ground, a slight nod of the head — because at half a body length

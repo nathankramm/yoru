@@ -328,64 +328,56 @@ def theme_stamp():
 # Three gaits, and which one is a matter of speed, the same across mammals:
 # a four-beat walk when slow, a two-beat trot at intermediate speeds, a
 # gallop -- for a deer, a bound -- when fast. He ambles at about half a
-# body length a second, which is a walk.
+# body length a second, which in a mammal is a walk. He is drawn
+# trotting. The reason is the whole of one evening (2026-09-16) and is
+# recorded here so it is not re-derived from the references.
 #
-# The walk: each foot lands on its own, in lateral sequence -- near hind,
-# near fore, far hind, far fore -- a quarter of the stride apart, and three
-# feet are on the ground at almost any moment. One leg per frame is in the
-# air here, lifted; the other three are planted: just
-# landed at reach, under, and pushing off. No bob; a walk is level, head
-# included. A walking quadruped's head does nod, once per foreleg, and it
-# was drawn -- WALK_NOD dropped the skull one row on frames 1 and 3. At
-# this size that is a rigid translation of the whole head-and-antlers
-# block while the neck keeps its shape, which reads as jitter, not a nod:
-# a real nod is a rotation the neck can't express in one row, and twice a
-# stride it was frequent noise on top of legs that already read as
-# walking. Removed for that reason; don't add it back for accuracy.
+# The walk was added for accuracy, and the biomechanics were right: below
+# the walk-trot transition a quadruped's feet land one at a time, in
+# lateral sequence -- near hind, near fore, far hind, far fore -- a
+# quarter of the stride apart, three on the ground at almost any moment,
+# and at his speed that is the gait. It was drawn that way, one leg per
+# frame in the air, checked against the sequence (audit 52), and shipped
+# for the roam. It was removed because at 24x24 four 2px columns moving
+# one at a time read as an insect. That is what four independently
+# moving legs look like at this size, whatever the animal, and it is the
+# cause: not the spacing, not the stride, not where the legs overlap. The
+# trot moves the legs as two diagonal pairs, the eye groups the pairs,
+# and it reads as a quadruped; running, the two are not close. Manning
+# Krull says as much for sprites 24 pixels and smaller: the tiny walk
+# cycle is legs apart and legs together, two frames, the brain filling
+# in four. Pairing is what makes a small sprite read. The biomechanics
+# was right and the drawing was wrong, and the fix is pairing, not
+# accuracy.
 #
-# The legs: 2px columns one column apart within a pair (near hind x 3-4,
-# far hind 6-7; far fore 10-11, near fore 13-14), and the near leg draws
-# last. That clustering is deliberate -- a deer shows two pairs, and an
-# even respacing to x 3, 7, 11, 15 was built and reverted (2026-09-16) for
-# reading as insect legs at 4px, four posts with a gap between each --
-# and it means a pair crosses twice a stride. Manning Krull, on sprites
-# 24 pixels high or smaller: the standard tiny walk is frames with the
-# legs apart and frames with them close together or overlapped, the
-# near leg brighter. Two rules follow, and audit check 56 holds the walk
-# to both. A far leg may be fully covered, never partly: the near leg
-# wins a shared column, so a far leg with one column still showing is a
-# tone boundary inside the pair, one thick leg with a dark edge. And
-# legs of one tone never touch: bright against dim reads as two legs at
-# 4px in every shipped theme (measured on everforest, the closest pair
-# of tones), but dim against dim is one wide dim shape.
+# Before that was understood, an evening went on the walk's legs, all of
+# it work on the wrong problem, kept here as such. The legs merged: 2px
+# columns one column apart within a pair (near hind x 3-4, far hind 6-7;
+# far fore 10-11, near fore 13-14) with lower offsets of +-2, so every
+# crossing shared a column. An even respacing to x 3, 7, 11, 15 with +-1
+# offsets cleared every frame at 16x and read as insect legs at 4px --
+# already the real problem, misread as spacing -- and a +-1 stride on
+# the near legs read as a shuffle; both reverted. Then the overlap was
+# separated from the touching: Krull has overlapped legs as normal at
+# this size, the near leg drawn brighter doing the separating, so the
+# rules became that a far leg may be fully covered but never partly (the
+# near leg wins a shared column, and one dim column left showing is a
+# tone boundary inside the pair, one thick leg with a dark edge) and
+# that legs of one tone never touch (bright on dim reads as two legs at
+# 4px in every shipped theme, measured on everforest; dim on dim is one
+# wide shape). The arithmetic: pairs three columns apart make a crossing
+# legal when the two offsets toward each other sum to 0 or 1 (a gap, a
+# touch) or 3 (an exact cover), never 2; a strict no-shared-column rule
+# would cap the total stride at 2. The table below satisfies both rules
+# with straight legs and a stride of three -- near hind +2/-1, near fore
+# +1/-2, far legs +-1 -- and was clean in all four frames at 4px. It
+# still read as an insect, because it was still four legs moving one at
+# a time. The rules survive; they now hold the trot (check 56).
 #
-# Hence the offsets, straight legs, one table per leg. Fully covered is
-# the reaching near leg landing exactly on the pushing far one, so the
-# two offsets sum to the three columns between them: near hind reach +2
-# on far hind push -1, far fore reach +1 under near fore push -2. The
-# near fore reaches only +1 because +2 puts it at x 15-16, one column
-# proud of the body's bottom row (x 2-15), a notch at the top of the leg
-# -- the same defect the belly attempt had at the rear -- and the near
-# hind pushes only -1 for the mirror reason. The far legs swing +-1
-# because a far hind reaching +2 lands against the far fore, dim on dim.
-# That is stride 3 on the near legs and 2 on the far, against 4 on the
-# old diagonal table (reach (1,2), push (-1,-2)), whose diagonal made
-# every crossing a partial cover: 14 shared cells across the four
-# frames. Nothing touches at all now, in any frame. The swing is a
-# straight lift for the same reason: a swinging leg with its lower
-# offset lands beside a neighbour.
-#
-# Rejected the same night: a strict no-shared-column rule (pairs three
-# columns apart force |near| + |far| <= 1 in the crossing frame, capping
-# total stride at 2); one table for all legs with reach +2 and push -1
-# (the near fore's notch, and the far hind against the far fore in frame
-# 3); and +-1 on the near legs, which lost the visible motion -- the near
-# leg's reach is the stride.
-#
-# Open, and only judgeable running: frames 0 and 1 show three legs, the
-# far one fully covered, which is right but might read as a dropped
-# frame in motion; and the near legs are asymmetric, hind +2/-1 against
-# fore +1/-2, which might read as a limp.
+# The walk stays for reference and is not a gait that gait() can return.
+# Also cut from it: a head nod, once per foreleg, which a walking
+# quadruped does have -- at this size a rigid one-row drop of the whole
+# head-and-antlers block, jitter rather than a nod.
 WALK = dict(          # each leg's offset, in phase order: lifted, reaching, under, pushing off
     nr=(0, 2, 0, -1),
     nf=(0, 1, 0, -2),
@@ -395,22 +387,45 @@ WALK = dict(          # each leg's offset, in phase order: lifted, reaching, und
 WALK_UP = (1, 0, 0, 0)
 WALK_PHASE = dict(nr=0, nf=1, fr=2, ff=3)
 # Sprite pixels of travel per frame of each gait; four frames to a stride.
-WALK_STEP, BOUND_STEP = 2.2, 3.2
+TROT_STEP, BOUND_STEP = 2.2, 3.2
 # The shortest trip worth taking, in strides. One is the gait's floor --
 # every foot lifts once, from any phase, since `dist` carries over -- but a
 # deer that stops after his first stride reads as a hesitation, not a trip.
-# Two is where a walk reads as going somewhere: 70px at the default scale.
+# Two is where a trot reads as going somewhere: 70px at the default scale.
 MIN_TRIP_STRIDES = 2
 # The wag: two swings, the tip on the flank for a beat and off for a beat.
 WAG_SECS = 0.6
 WAG_BEAT = 0.15
-# The trot: two-beat, diagonal pairs in phase -- near hind with far fore --
-# and the body rises a row on the pass, the legs lengthening to meet it.
-# Not used for the roam now; kept for a faster amble.
-TROT = [
-    dict(r1=0, r2=-1, f1=1, f2=2),
+# The trot: two-beat, diagonal pairs in phase -- near hind with far fore
+# -- the body up a row on the pass with the legs lengthening to meet it,
+# and it is the roam gait, for the reason at WALK: two pairs read as a
+# quadruped at 24x24 where four single legs read as an insect. It was
+# the roam gait from the first commit, gave way to the walk for accuracy
+# on 2026-09-16, and came back the same night.
+#
+# The near legs are as first drawn: hind -1/+1, fore reaching (1,2) and
+# back (0,-2). The far legs used to be the near table two frames on,
+# which put the far hind and far fore a shared column apart in the
+# "apart" frame and left a dim sliver beside each near leg in the
+# "together" frame -- both breaches of the rules at WALK, now check 56.
+# So they have their own table, and they move less: the far fore steps
+# back one with the near hind and forward one under the near fore, an
+# exact cover, and the far hind stands, one column off the near hind as
+# it comes under, bright against dim. Any far hind step in the apart
+# frame lands dim on dim against the far fore (the two far legs may
+# close by one column, not two), and in the together frame the far fore
+# has to be exactly under the near fore's lower leg or not there at all.
+# The near legs, which are what shows, are unchanged.
+TROT = [                                   # the near legs
+    dict(r1=0, r2=-1, f1=1, f2=2),         # apart: hind back, fore reaching
+    dict(r1=0, r2=0, f1=0, f2=0),          # the pass, body up a row
+    dict(r1=0, r2=1, f1=0, f2=-2),         # together: hind under, fore back
     dict(r1=0, r2=0, f1=0, f2=0),
-    dict(r1=0, r2=1, f1=0, f2=-2),
+]
+TROT_FAR = [                               # the far legs, same frames
+    dict(r1=0, r2=0, f1=0, f2=-1),         # far fore back with the near hind
+    dict(r1=0, r2=0, f1=0, f2=0),
+    dict(r1=0, r2=0, f1=0, f2=1),          # far fore forward with the near hind, under the near fore
     dict(r1=0, r2=0, f1=0, f2=0),
 ]
 BOB = [0, -1, 0, -1]
@@ -532,8 +547,8 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, gait=None, chew=0, doze=0)
         legs = {k: (WALK[k][(frame - p) % 4], WALK[k][(frame - p) % 4],
                     WALK_UP[(frame - p) % 4]) for k, p in WALK_PHASE.items()}
     else:
-        table = BOUND if bound else TROT
-        near, far = table[frame], table[(frame + 2) % 4]
+        near = (BOUND if bound else TROT)[frame]
+        far = BOUND[(frame + 2) % 4] if bound else TROT_FAR[frame]
         legs = dict(nr=(near["r1"], near["r2"], 0), nf=(near["f1"], near["f2"], 0),
                     fr=(far["r1"], far["r2"], 0), ff=(far["f1"], far["f2"], 0))
     # A bob is a gait thing. Parked, there is none: he is frame 1 all day,
@@ -1739,7 +1754,7 @@ class Pet:
                 # nearer edge, as far as that side holds. Home is
                 # usually against an edge, and a draw symmetric about it
                 # clamped to the surface made half his walks a 20px shuffle
-                # -- with a four-beat walk, a truncated cycle. With no room
+                # -- a truncated cycle. With no room
                 # for a trip on the open side there is less on the other,
                 # so he skips this one and tries again later.
                 span = min(width * 0.45, 520)
@@ -1818,12 +1833,13 @@ class Pet:
 
     def gait(self):
         """None parked; the bound when he has spooked himself, else the
-        walk. He ambles at 46-72 px/s, about half a body length a second,
-        and that is a walk. The trot is drawn but not used: it would be
-        the gait for a faster amble, if he ever has one."""
+        trot. He ambles at 46-72 px/s, about half a body length a second,
+        which in a mammal is a walk, and the walk is drawn (WALK); it is
+        not used, because at 24x24 four legs moving one at a time read
+        as an insect (see the comment there). The trot pairs them."""
         if not self.moving():
             return None
-        return "bound" if self.speed > 120 else "walk"
+        return "bound" if self.speed > 120 else "trot"
 
     def tail_frame(self):
         """2 for the flag, which is the whole of a bound; 1 for the wag's
@@ -1845,12 +1861,12 @@ class Pet:
                 self.head, self.text)
 
     def min_trip(self):
-        return MIN_TRIP_STRIDES * 4 * WALK_STEP * self.px
+        return MIN_TRIP_STRIDES * 4 * TROT_STEP * self.px
 
     def frame(self):
         if not self.moving():
             return 1
-        step = self.px * (BOUND_STEP if self.bounding() else WALK_STEP)
+        step = self.px * (BOUND_STEP if self.bounding() else TROT_STEP)
         return int(self.dist / step) % 4
 
 

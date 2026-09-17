@@ -223,11 +223,13 @@ level = all(body(f, "walk") == body(0, None) for f in range(4))
 ck("51 every frame one piece, no floating pixel, no bob while parked, walk level head and all", not lonely and not multi and still and level,
    "%d combinations, floating: %s; more than one piece: %s; parked body still and trotting body rises: %s; walking body level, rows 0-17: %s" % (
        combos, lonely[:3] or "none", ", ".join("%s %s frame %d -> %d" % x for x in multi) or "none", still, level))
-# The walk is four-beat: in every frame exactly one hoof is off the ground,
-# each leg takes its turn, and the order is the lateral sequence -- near
-# hind, near fore, far hind, far fore. The trot is two-beat: all four hooves
-# on the ground with diagonal pairs in phase. The roam is a walk, the bolt
-# a bound; the flag flies only in the bound and the wag never does.
+# The roam is the trot: two-beat, all four hooves on the ground, diagonal
+# pairs in phase. The walk is drawn and kept for reference (see WALK in
+# yoru.py for why it is not used) and must never be picked: it is still
+# four-beat -- one hoof off the ground per frame, each leg in turn, in the
+# lateral sequence near hind, near fore, far hind, far fore -- so the
+# reference stays honest. The bolt is a bound; the flag flies only in the
+# bound and the wag never does.
 def hooves(f, g):
     pts = m.pixels(f, False, "stand", gait=g)
     return sorted((x, y) for x, y, c in pts if c in (m.HOOF, m.FAR_HOOF))
@@ -248,39 +250,47 @@ for i in range(int(3600 / .033)):
     g = q.gait(); gaits[g] += 1
     if q.tail_frame() == 2: flags[g] += 1
     if q.tail_frame() == 1: wags[g] += 1
-ck("52 the roam is a four-beat walk; the flag flies in the bound only; the wag never does",
-   one_up and order == ["nr", "nf", "fr", "ff"] and trot_down and gaits["walk"] > 0 and gaits["bound"] > 0
-   and gaits["trot"] == 0 and set(flags) <= {"bound"} and flags["bound"] > 0 and "bound" not in wags and wags[None] > 0,
-   "walk: one hoof up per frame %s, order %s; trot: all down %s; 1h: %d walk frames, %d bound, %d trot; flag in %s; wag in %s" % (
-       one_up, order, trot_down, gaits["walk"], gaits["bound"], gaits["trot"], dict(flags), dict(wags)))
-# Legs cross, and two rules hold the walk (see WALK in yoru.py, which has
-# the arithmetic): a far leg may be fully covered, never partly -- the
-# pairs are a column apart and the near leg draws last, so a far leg
-# with one column still showing is a tone boundary inside the pair, one
-# thick leg with a dark edge -- and legs of one tone never touch, since
-# only the bright/dim boundary separates two legs at 4px. A near leg
-# touching a far one is allowed. The trot, bound and settle keep their
-# old offsets and partial covers -- the trot is unused, the bound is
-# brief and the body lift carries it, the settle is one held frame -- so
-# for them this stays the ratchet it was: the count of frames with a leg
-# row wider than two may fall, never rise. Was 14 of 16 with the walk in.
+ck("52 the roam is a two-beat trot, never the walk; the flag flies in the bound only; the wag never does",
+   trot_down and gaits["trot"] > 0 and gaits["bound"] > 0 and gaits["walk"] == 0
+   and one_up and order == ["nr", "nf", "fr", "ff"]
+   and set(flags) <= {"bound"} and flags["bound"] > 0 and "bound" not in wags and wags[None] > 0,
+   "trot: all down %s; 1h: %d trot frames, %d bound, %d walk; walk (reference): one hoof up per frame %s, order %s; flag in %s; wag in %s" % (
+       trot_down, gaits["trot"], gaits["bound"], gaits["walk"], one_up, order, dict(flags), dict(wags)))
+# Legs cross, and two rules hold the trot -- the roam gait -- and the
+# walk (see WALK and TROT in yoru.py, which have the arithmetic): a far
+# leg may be fully covered, never partly -- the pairs are a column apart
+# and the near leg draws last, so a far leg with one column still showing
+# is a tone boundary inside the pair, one thick leg with a dark edge --
+# and legs of one tone never touch, since only the bright/dim boundary
+# separates two legs at 4px. A near leg touching a far one is allowed.
+# The bound and the settle keep their old offsets and partial covers --
+# the bound is brief and the body lift carries it, the settle is one
+# held frame -- so for them this stays the ratchet it was: the count of
+# frames with a leg row wider than two may fall, never rise. Was 14 of
+# 16 with the walk and trot in.
 LEG_AX = dict(nr=3, fr=6, ff=10, nf=13)          # as pixels() draws them
-def walk_legs(f):
+def gait_legs(g, f):
+    """Each leg's pixels in one frame of the walk or the trot, by leg."""
     rows = collections.defaultdict(dict)
     for k, ax in LEG_AX.items():
-        i = (f - m.WALK_PHASE[k]) % 4; d = m.WALK[k][i]; pts = []
-        m._leg(pts, ax, d, d, k, k, 0, 18, None, m.WALK_UP[i])
+        if g == "walk":
+            i = (f - m.WALK_PHASE[k]) % 4; d1 = d2 = m.WALK[k][i]; up = m.WALK_UP[i]; top = 18
+        else:
+            t = (m.TROT if k[0] == "n" else m.TROT_FAR)[f]
+            d1, d2 = (t["r1"], t["r2"]) if k[1] == "r" else (t["f1"], t["f2"]); up = 0; top = 18 + m.BOB[f]
+        pts = []; m._leg(pts, ax, d1, d2, k, k, 0, top, None, up)
         for x, y, _ in pts: rows[y].setdefault(k, set()).add(x)
     return rows
 partial = []; same_touch = []
-for f in range(4):
-    for y, r in walk_legs(f).items():
-        for a in r:
-            for b in r:
-                if a >= b: continue
-                if r[a] & r[b] and r[a] != r[b]: partial.append((f, y, a, b))
-                elif a[0] == b[0] and not (r[a] & r[b]) and min(abs(x - z) for x in r[a] for z in r[b]) == 1:
-                    same_touch.append((f, y, a, b))
+for g in ("trot", "walk"):
+    for f in range(4):
+        for y, r in gait_legs(g, f).items():
+            for a in r:
+                for b in r:
+                    if a >= b: continue
+                    if r[a] & r[b] and r[a] != r[b]: partial.append((g, f, y, a, b))
+                    elif a[0] == b[0] and not (r[a] & r[b]) and min(abs(x - z) for x in r[a] for z in r[b]) == 1:
+                        same_touch.append((g, f, y, a, b))
 def leg_runs(pose, g, f):
     dy = (m.BOB[f] if g == "trot" else m.BOUND[f]["lift"] if g == "bound"
           else m.SETTLE_SHIFT[1] if pose == "settle" else 0)
@@ -292,12 +302,12 @@ def leg_runs(pose, g, f):
         for a, b in zip(xs, xs[1:]):
             run = run + 1 if b == a + 1 else 1
             if run > 2: yield (pose, g, f, y, xs)
-wide = sorted({w[:3] for pose, g in (("stand", "trot"), ("stand", "bound"), ("settle", None))
+wide = sorted({w[:3] for pose, g in (("stand", "bound"), ("settle", None))
                for f in range(4) for w in leg_runs(pose, g, f)})
-MERGED = 10
-ck("56 the walk never half-covers a leg or touches same-tone legs; trot, bound and settle no worse than the known %d frames" % MERGED,
+MERGED = 8
+ck("56 the trot and the walk never half-cover a leg or touch same-tone legs; bound and settle no worse than the known %d frames" % MERGED,
    not partial and not same_touch and len(wide) <= MERGED,
-   "walk partial covers: %s; same-tone touches: %s; %d of 12 other frames with a leg row wider than 2: %s" % (
+   "partial covers: %s; same-tone touches: %s; %d of 8 bound/settle frames with a leg row wider than 2: %s" % (
        partial[:4] or "none", same_touch[:4] or "none", len(wide), ", ".join("%s %s %d" % (p, g or "parked", f) for p, g, f in wide) or "none"))
 # Tips generated from the user's own bindings.lua replace the curated tip for
 # a key the user rebound and add the rest. Afterwards no key may be covered

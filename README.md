@@ -308,9 +308,12 @@ an animal moves facing the open and settles facing its cover. Drag him to the
 other side and both follow; parked near the middle he keeps whichever way he
 last faced rather than flipping on a nudge. Left alone he drops his head and grazes, his ears twitch,
 and now and then his tail gives the casual side-to-side wag that is a deer's
-all-clear. His walks are a four-beat walk — one foot in the air at a time,
-three on the ground, the body level — because at half a body length a second
-that is what a mammal does; about one in five, he spooks himself and
+all-clear. His walks are drawn as a trot — the legs moving in diagonal
+pairs, the body lifting a row on the pass — though at half a body length a
+second a mammal walks, four-beat, one foot at a time. That was drawn too and
+it read as an insect: at 24 pixels four legs moving one at a time are what
+an insect looks like, and two pairs are what a quadruped looks like. About
+one in five, he spooks himself and
 bounds instead, and only then does the tail go up, because the flag means
 danger is here and a deer standing calmly doesn't say that. None of it does
 anything. It's just him.

@@ -253,6 +253,31 @@ ck("52 the roam is a four-beat walk; the flag flies in the bound only; the wag n
    and gaits["trot"] == 0 and set(flags) <= {"bound"} and flags["bound"] > 0 and "bound" not in wags and wags[None] > 0,
    "walk: one hoof up per frame %s, order %s; trot: all down %s; 1h: %d walk frames, %d bound, %d trot; flag in %s; wag in %s" % (
        one_up, order, trot_down, gaits["walk"], gaits["bound"], gaits["trot"], dict(flags), dict(wags)))
+# Legs that merge. Every leg is a 2px column, so a drawn row below the
+# body should be runs of at most 2 with an empty column between; in the
+# shipped sprite it is not (see the known flaw at WALK in yoru.py): the
+# pairs are a column apart and the offsets swing two, so 14 of the 16
+# frames here -- all four walk, all four bound, trot 0 and 2, and the
+# settle frame -- have a row with a wider run. The clean version was
+# built and reverted for reading as insect legs at 4px. This is a
+# ratchet, not a pass: the count may fall, never rise. Set it to zero
+# when the legs are fixed.
+def leg_runs(pose, g, f):
+    dy = (m.BOB[f] if g == "trot" else m.BOUND[f]["lift"] if g == "bound"
+          else m.SETTLE_SHIFT[1] if pose == "settle" else 0)
+    rows = collections.defaultdict(list)
+    for x, y, _ in m.pixels(f, False, pose, gait=g):
+        if y > 17 + dy: rows[y].append(x)
+    for y, xs in rows.items():
+        xs = sorted(set(xs)); run = 1
+        for a, b in zip(xs, xs[1:]):
+            run = run + 1 if b == a + 1 else 1
+            if run > 2: yield (pose, g, f, y, xs)
+wide = sorted({w[:3] for pose, g in (("stand", "walk"), ("stand", "trot"), ("stand", "bound"), ("settle", None))
+               for f in range(4) for w in leg_runs(pose, g, f)})
+MERGED = 14
+ck("56 leg merges: no more frames than the known %d" % MERGED, len(wide) <= MERGED,
+   "%d of 16 frames have a leg row wider than 2: %s" % (len(wide), ", ".join("%s %s %d" % (p, g or "parked", f) for p, g, f in wide) or "none"))
 # Tips generated from the user's own bindings.lua replace the curated tip for
 # a key the user rebound and add the rest. Afterwards no key may be covered
 # twice and every id must be unique. Run against the real file when there is

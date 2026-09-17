@@ -98,6 +98,41 @@ def toggle_visible(*_):
 
 # ---------------------------------------------------------------- sprite ----
 # 24x24. Rows 0-17 come from this map; legs are animated in code.
+#
+# The body is anatomically wrong in two places, on purpose, and both were
+# corrected once and reverted (2026-09-16), so read this before doing it
+# again from the references.
+#
+# The belly tapers the wrong way. Rows 14-17 go from x 2-17 to x 2-15:
+# shallower toward the front, square at the rump. A deer is the opposite
+# -- a deep brisket at the chest and the flank tucking up toward the rear;
+# Longstride's proportion check is that the nose lines up with the front
+# legs and the chest sticks out from there. It was inverted: rows 15-16
+# to x=17, row 17 to x=16, and the rear corner stepped in over rows 16-17
+# (x=3, then x=4). At 16x it was the better deer. At the shipped 4px the
+# near hind leg, a column at x 3-4 from row 18, no longer had body over
+# it: it hung from (4,17) by one diagonal pixel, passed check 51 as one
+# piece, and read as a leg floating beside the body. The tuck cannot
+# move forward of the hind leg because the leg is a fixed column, and the
+# leg cannot move without the respacing described at WALK. So the square
+# rump stays: it is what holds the hind leg on.
+#
+# No jugular groove. John Muir Laws has the brachiocephalicus running
+# skull to shoulder and "the lower edge of this muscle often makes a
+# prominent groove called the jugular groove"; without it neck and chest
+# share a tone with no line between them, and head, neck and shoulder
+# read as one mass, which is what makes the resting neck look thick. It
+# was drawn: three pixels of FAR one inside the throat edge, (17,10)
+# (16,11), continued into the chest at (16,12) so it survived the settle
+# and rest poses, where rows 10-11 slide under the shoulder. Legible in
+# all 22 themes, dark and light. At 4px it read as a smudge, not a line:
+# three pixels of shade is a large share of a neck five wide. A line on
+# the edge itself (18,10) (17,11) only thinned the neck; started from the
+# jaw at (16,9) it was a spot. Not drawn at this size.
+#
+# Sources: johnmuirlaws.com/draw-deer-anatomy (jugular groove, leg taper,
+# hock divot), longstrideillustration.com/deer-drawing-tutorial (nose to
+# front-leg proportion).
 BODY = [
     "..........a..a..a.......",
     "...........a.ad.ad......",
@@ -307,6 +342,26 @@ def theme_stamp():
 # a real nod is a rotation the neck can't express in one row, and twice a
 # stride it was frequent noise on top of legs that already read as
 # walking. Removed for that reason; don't add it back for accuracy.
+#
+# Known flaw: the legs merge. They are 2px columns one column apart
+# within a pair (near hind x 3-4, far hind 6-7; far fore 10-11, near fore
+# 13-14) and the lower offsets swing +-2, so any frame that shifts a pair
+# toward each other closes the gap: walk frame 0 row 21 is one 4-wide
+# block at x 4-7, frame 3 is x 11-14, and frames 1 and 2 overlap outright.
+# The trot and bound do the same; audit check 56 counts the frames. It
+# is arithmetic, not a table error: near and far of a pair are half a
+# stride apart, so their relative swing is twice the range, and at +-1 a
+# pair still needs five columns and four legs eighteen, against a
+# thirteen-column underside. The fix that satisfies it was built and
+# reverted (2026-09-16): +-1 offsets, the legs respaced to x 3, 7, 11, 15
+# with the far legs' swing clamped away from their near mate and static
+# outside the walk. Every frame was clean at 16x. At 4px four evenly
+# spaced posts with a gap between each read as insect legs: a deer shows
+# two clustered pairs, and the clustering is what the merge is the price
+# of. Also part of it: the swing frame as a straight lift rather than a
+# bent knee, because the whole upper leg beside an offset lower is a
+# 3-wide run too. The merge is less wrong than the alternatives found so
+# far; a fix has to keep the pairs clustered.
 WALK = [
     dict(d1=0, d2=1, up=1),      # swinging: lifted, coming forward
     dict(d1=1, d2=2, up=0),      # reaching, just landed

@@ -263,7 +263,7 @@ yoru --forget-known       # un-retire everything
 | `--idle` | 300 | seconds before he assumes you've left (`0` = always on) |
 | `--cooldown` | 90 | minimum quiet before a contextual tip |
 | `--corner` | `br` | `br`, `bl`, `tr`, `tl` — where he parks on first run |
-| `--margin` | 24 | pixels from the screen edge on first run |
+| `--margin` | 24 | pixels from the side edge on first run. The bottom edge is the ground, so `br`/`bl` stand on it with no gap; `tr`/`tl` keep the gap below the bar, since there's nothing to stand on up there |
 | `--scale` | 4 | pixel size |
 | `--topics` | | e.g. `nvim,tmux` — limit him |
 | `--quiet` | | contextual tips only |

@@ -1294,11 +1294,17 @@ class Pet:
         if saved:
             self.home_x, self.home_y = saved
         else:
+            # The bottom of the surface is the ground: hooves land on the
+            # sprite's last row, so that row sits on the screen edge (or on
+            # the bar, if the bar is at the bottom -- the compositor shrinks
+            # the surface around it). --margin is the gap from the side. The
+            # top corners have no ground under them; there he keeps the
+            # margin below the bar, standing on the shelf he always did.
             m = self.margin
             right = self.corner in ("br", "tr")
             bottom = self.corner in ("br", "bl")
             self.home_x = (width - self.w - m) if right else m
-            self.home_y = (height - self.h - m) if bottom else m
+            self.home_y = (height - self.h) if bottom else m
         self.clamp_home(width, height)
         self.x, self.y = self.home_x, self.home_y
         self.face_open(width)
@@ -1325,7 +1331,7 @@ class Pet:
 
     def clamp_home(self, width, height):
         self.home_x = max(4, min(self.home_x, width - self.w - 4))
-        self.home_y = max(4, min(self.home_y, height - self.h - 4))
+        self.home_y = max(4, min(self.home_y, height - self.h))
 
     def refit(self, width, height):
         """The surface changed size under him — a monitor was unplugged and
@@ -1336,7 +1342,7 @@ class Pet:
         was = (self.home_x, self.home_y, self.x, self.y)
         self.clamp_home(width, height)
         self.x = max(4, min(self.x, width - self.w - 4))
-        self.y = max(4, min(self.y, height - self.h - 4))
+        self.y = max(4, min(self.y, height - self.h))
         if self.mode in ("out", "back"):
             self.target = max(4, min(self.target, width - self.w - 4))
         self.face_open(width)           # the other side may be the near one now
@@ -1665,7 +1671,7 @@ class Pet:
                     self.min_trip(), min(span, room))
                 # A walk only moves x. If y is off the surface he would walk
                 # past unseen, so bring it in before he sets off.
-                self.y = max(4, min(self.y, height - self.h - 4))
+                self.y = max(4, min(self.y, height - self.h))
                 # One trip in five he spooks himself and bounds it, tail up.
                 if random.random() < 0.2:
                     self.speed = 150.0
@@ -1971,7 +1977,9 @@ def main(argv=None):
     p.add_argument("--scale", type=int, default=4, help="pixel size (default 4)")
     p.add_argument("--corner", default="br", choices=["br", "bl", "tr", "tl"],
                    help="where he parks on first run (default bottom right)")
-    p.add_argument("--margin", type=int, default=24, help="gap from the screen edge")
+    p.add_argument("--margin", type=int, default=24,
+                   help="gap from the side of the screen; the bottom is the ground, so "
+                        "the bottom corners have none (the top corners keep it, below the bar)")
     p.add_argument("--interval", type=float, default=900,
                    help="average seconds between utterances, tips and remarks "
                         "alike, once the first-hour tips are done (default 900; "
@@ -2372,7 +2380,7 @@ def build_app(opts, tips):
                 return
             w, h = self.area.get_width(), self.area.get_height()
             pet.x = max(4, min(self._grab[0] + dx, w - pet.w - 4))
-            pet.y = max(4, min(self._grab[1] + dy, h - pet.h - 4))
+            pet.y = max(4, min(self._grab[1] + dy, h - pet.h))
 
         def on_drag_end(self, gesture, dx, dy):
             pet = self.pet

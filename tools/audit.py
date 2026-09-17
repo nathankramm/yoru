@@ -320,8 +320,8 @@ q.x, q.y = 1920 - q.w - 4, 1054 - q.h - 4          # dragged to the far corner
 q.home_x, q.home_y = q.x, q.y
 q.step(.033, 1.0, 1920, 1054)
 q.step(.033, 1.033, 1280, 774)                       # the surface shrank
-def inside(w, h): return (4 <= q.x <= w - q.w - 4 and 4 <= q.y <= h - q.h - 4
-                          and 4 <= q.home_x <= w - q.w - 4 and 4 <= q.home_y <= h - q.h - 4)
+def inside(w, h): return (4 <= q.x <= w - q.w - 4 and 4 <= q.y <= h - q.h
+                          and 4 <= q.home_x <= w - q.w - 4 and 4 <= q.home_y <= h - q.h)
 migrated = inside(1280, 774)
 region = (int(q.x), int(q.y), int(q.w), int(q.h)); landed = (q.x, q.y, q.home_x, q.home_y)
 region_ok = region[0] >= 0 and region[1] >= 0 and region[0] + region[2] <= 1280 and region[1] + region[3] <= 774
@@ -329,7 +329,7 @@ region_ok = region[0] >= 0 and region[1] >= 0 and region[0] + region[2] <= 1280 
 # size from an off-surface y and check he is on it while walking.
 q.y = q.home_y = 900; q.next_roam = 0; q.pause = 0; q.mode = "home"
 for i in range(12): q.step(.033, 2.0 + i * .033, 1280, 774)   # he is away, so up off the ground first
-walk_ok = q.mode == "out" and 4 <= q.y <= 774 - q.h - 4
+walk_ok = q.mode == "out" and 4 <= q.y <= 774 - q.h
 # And the reverse: a bigger surface changes nothing he can see.
 q2 = m.Pet(O, m.KNOWLEDGE); q2.place(1280, 774); q2.step(.033, 1.0, 1280, 774)
 was = (q2.x, q2.y); q2.step(.033, 1.033, 1920, 1054)
@@ -681,6 +681,26 @@ ck("54 he faces the near edge: into the corner from every corner, after a drag, 
    "corners %s; dragged to x=200 -> %d, speaking %d, quiet again %d; center-200 -> %d, +30 past center -> %d, +200 -> %d; "
    "x=700 on 1920 -> %d, surface to 1000 -> %d; from br he walks %s" % (
        faces, dragged, spoke, quiet, before, small, big, wide, shrunk, {-1: "left, into the room", 1: "RIGHT", 0: "NOT AT ALL"}[walk_dir]))
+# The bottom of the surface is the ground. From br and bl his last row -- the
+# hooves' row -- sits on the surface's bottom edge; --margin is the side gap
+# only. The top corners keep the margin below the bar. A saved (dragged) spot
+# is the user's and is left where it is, shelf or not; and the clamps let a
+# drag reach the ground too.
+def placed(corner, margin=24):
+    q = m.Pet(types.SimpleNamespace(**dict(vars(O), corner=corner, margin=margin)), m.KNOWLEDGE)
+    q.place(1920, 1080); return q
+g = {c: (placed(c).home_x, placed(c).home_y) for c in ("br", "bl", "tr", "tl")}
+w, h = placed("br").w, placed("br").h
+ground_ok = g["br"] == (1920 - w - 24, 1080 - h) and g["bl"] == (24, 1080 - h)
+top_ok = g["tr"] == (1920 - w - 24, 24) and g["tl"] == (24, 24)
+side_ok = placed("br", 60).home_x == 1920 - w - 60 and placed("br", 60).home_y == 1080 - h
+m.save_json(m.STATE, dict(m.read_state(), x=500, y=700)); kept = placed("br"); saved_ok = (kept.home_x, kept.home_y) == (500, 700)
+st = m.read_state(); st.pop("x", None); st.pop("y", None); m.save_json(m.STATE, st)
+d = placed("br"); d.home_y = d.y = 5000; d.clamp_home(1920, 1080); drag_ok = d.home_y == 1080 - h
+ck("55 the bottom of the screen is the ground", ground_ok and top_ok and side_ok and saved_ok and drag_ok,
+   "br %s bl %s (bottom row on the edge); tr %s tl %s (margin below the bar); --margin 60 -> x %d, y %d; "
+   "saved spot kept %s; a drag clamps to the ground %s" % (
+       g["br"], g["bl"], g["tr"], g["tl"], placed("br", 60).home_x, placed("br", 60).home_y, saved_ok, drag_ok))
 # Cadence. Two speeds and a decay, all from tools/exhaust.py. A fresh user at
 # the default has every fundamental inside roughly a hundred minutes of
 # presence (300 s, ~21 utterances at 15% chatter); after that the gap between

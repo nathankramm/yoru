@@ -215,13 +215,13 @@ for pose in ("stand", "graze", "rest", "settle"):
 multi = sorted({(pose, g, f, n) for (pose, g, f, n), _ in pieces.items() if n > 1})
 # parked he must not bob at all: the body (rows 0-17) sits where frame 0's
 # does on every frame; trotting it rises on frames 1 and 3; walking it is
-# level and only the skull nods
+# level, head included -- the walk's head nod was tried and cut (see WALK
+# in yoru.py), so a moving skull here is a regression, not accuracy
 body = lambda f, g, top=17: sorted(p for p in m.pixels(f, False, "stand", gait=g) if p[1] <= top)
 still = all(body(f, None) == body(0, None) for f in range(4)) and body(1, "trot") != body(0, "trot")
-torso = lambda f, g: sorted(p for p in m.pixels(f, False, "stand", gait=g) if 12 <= p[1] <= 17)
-level = all(torso(f, "walk") == torso(0, None) for f in range(4))
-ck("51 every frame one piece, no floating pixel, no bob while parked, walk level", not lonely and not multi and still and level,
-   "%d combinations, floating: %s; more than one piece: %s; parked body still and trotting body rises: %s; walking torso level: %s" % (
+level = all(body(f, "walk") == body(0, None) for f in range(4))
+ck("51 every frame one piece, no floating pixel, no bob while parked, walk level head and all", not lonely and not multi and still and level,
+   "%d combinations, floating: %s; more than one piece: %s; parked body still and trotting body rises: %s; walking body level, rows 0-17: %s" % (
        combos, lonely[:3] or "none", ", ".join("%s %s frame %d -> %d" % x for x in multi) or "none", still, level))
 # The walk is four-beat: in every frame exactly one hoof is off the ground,
 # each leg takes its turn, and the order is the lateral sequence -- near

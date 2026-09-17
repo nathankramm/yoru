@@ -299,8 +299,14 @@ def theme_stamp():
 # near fore, far hind, far fore -- a quarter of the stride apart, and three
 # feet are on the ground at almost any moment. One leg per frame is in the
 # air here, knee bent, coming forward; the other three are planted: just
-# landed at reach, under, and pushing off. No bob; a walk is level. The
-# head nods once per foreleg, twice a stride, as a walking quadruped's does.
+# landed at reach, under, and pushing off. No bob; a walk is level, head
+# included. A walking quadruped's head does nod, once per foreleg, and it
+# was drawn -- WALK_NOD dropped the skull one row on frames 1 and 3. At
+# this size that is a rigid translation of the whole head-and-antlers
+# block while the neck keeps its shape, which reads as jitter, not a nod:
+# a real nod is a rotation the neck can't express in one row, and twice a
+# stride it was frequent noise on top of legs that already read as
+# walking. Removed for that reason; don't add it back for accuracy.
 WALK = [
     dict(d1=0, d2=1, up=1),      # swinging: lifted, coming forward
     dict(d1=1, d2=2, up=0),      # reaching, just landed
@@ -308,7 +314,6 @@ WALK = [
     dict(d1=-1, d2=-2, up=0),    # pushing off
 ]
 WALK_PHASE = dict(nr=0, nf=1, fr=2, ff=3)
-WALK_NOD = [0, 1, 0, 1]
 # Sprite pixels of travel per frame of each gait; four frames to a stride.
 WALK_STEP, BOUND_STEP = 2.2, 3.2
 # The shortest trip worth taking, in strides. One is the gait's floor --
@@ -453,14 +458,13 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, gait=None, chew=0, doze=0)
                     fr=(far["r1"], far["r2"], 0), ff=(far["f1"], far["f2"], 0))
     # A bob is a gait thing. Parked, there is none: he is frame 1 all day,
     # and a body a row off its legs was a seam for as long as he stood
-    # there. Walking he is level; the head nods instead. Trotting, the
+    # there. Walking he is level, head and all. Trotting, the
     # body rises on the pass and the legs lengthen to meet it. In a bound
     # the whole animal leaves the ground, so the legs rise with the body;
     # lifting the body alone just severs them. Lying down there is
     # nothing to bob either way.
     lift = BOUND[frame]["lift"] if bound and not (resting or settling) else 0
     bob = 0 if resting or settling else BOB[frame] if gait == "trot" else lift
-    nod = WALK_NOD[frame] if walking and pose == "stand" else 0
     top = 18 + (0 if bound else bob)
     floor = 17 + SETTLE_SHIFT[1] if settling else None
 
@@ -489,8 +493,6 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, gait=None, chew=0, doze=0)
                     out.append((x + dx + 1, y + bob + dy, col))
             elif settling:
                 dx, dy = SETTLE_HEAD if y <= 11 else SETTLE_SHIFT
-            elif nod and y <= 9:
-                dy = nod                       # the walk's head nod: skull only
             # The wag: the tail swings sideways, and in profile what shows
             # is the tip crossing onto the flank. Drawn after the rump.
             if tail == 1 and y == 13 and x == 0:

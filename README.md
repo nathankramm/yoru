@@ -309,8 +309,8 @@ other side and both follow; parked near the middle he keeps whichever way he
 last faced rather than flipping on a nudge. Left alone he drops his head and grazes, his ears twitch,
 and now and then his tail gives the casual side-to-side wag that is a deer's
 all-clear. His walks are a four-beat walk — one foot in the air at a time,
-three on the ground, a slight nod of the head — because at half a body length
-a second that is what a mammal does; about one in five, he spooks himself and
+three on the ground, the body level — because at half a body length a second
+that is what a mammal does; about one in five, he spooks himself and
 bounds instead, and only then does the tail go up, because the flag means
 danger is here and a deer standing calmly doesn't say that. None of it does
 anything. It's just him.

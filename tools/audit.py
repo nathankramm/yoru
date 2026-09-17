@@ -253,15 +253,34 @@ ck("52 the roam is a four-beat walk; the flag flies in the bound only; the wag n
    and gaits["trot"] == 0 and set(flags) <= {"bound"} and flags["bound"] > 0 and "bound" not in wags and wags[None] > 0,
    "walk: one hoof up per frame %s, order %s; trot: all down %s; 1h: %d walk frames, %d bound, %d trot; flag in %s; wag in %s" % (
        one_up, order, trot_down, gaits["walk"], gaits["bound"], gaits["trot"], dict(flags), dict(wags)))
-# Legs that merge. Every leg is a 2px column, so a drawn row below the
-# body should be runs of at most 2 with an empty column between; in the
-# shipped sprite it is not (see the known flaw at WALK in yoru.py): the
-# pairs are a column apart and the offsets swing two, so 14 of the 16
-# frames here -- all four walk, all four bound, trot 0 and 2, and the
-# settle frame -- have a row with a wider run. The clean version was
-# built and reverted for reading as insect legs at 4px. This is a
-# ratchet, not a pass: the count may fall, never rise. Set it to zero
-# when the legs are fixed.
+# Legs cross, and two rules hold the walk (see WALK in yoru.py, which has
+# the arithmetic): a far leg may be fully covered, never partly -- the
+# pairs are a column apart and the near leg draws last, so a far leg
+# with one column still showing is a tone boundary inside the pair, one
+# thick leg with a dark edge -- and legs of one tone never touch, since
+# only the bright/dim boundary separates two legs at 4px. A near leg
+# touching a far one is allowed. The trot, bound and settle keep their
+# old offsets and partial covers -- the trot is unused, the bound is
+# brief and the body lift carries it, the settle is one held frame -- so
+# for them this stays the ratchet it was: the count of frames with a leg
+# row wider than two may fall, never rise. Was 14 of 16 with the walk in.
+LEG_AX = dict(nr=3, fr=6, ff=10, nf=13)          # as pixels() draws them
+def walk_legs(f):
+    rows = collections.defaultdict(dict)
+    for k, ax in LEG_AX.items():
+        i = (f - m.WALK_PHASE[k]) % 4; d = m.WALK[k][i]; pts = []
+        m._leg(pts, ax, d, d, k, k, 0, 18, None, m.WALK_UP[i])
+        for x, y, _ in pts: rows[y].setdefault(k, set()).add(x)
+    return rows
+partial = []; same_touch = []
+for f in range(4):
+    for y, r in walk_legs(f).items():
+        for a in r:
+            for b in r:
+                if a >= b: continue
+                if r[a] & r[b] and r[a] != r[b]: partial.append((f, y, a, b))
+                elif a[0] == b[0] and not (r[a] & r[b]) and min(abs(x - z) for x in r[a] for z in r[b]) == 1:
+                    same_touch.append((f, y, a, b))
 def leg_runs(pose, g, f):
     dy = (m.BOB[f] if g == "trot" else m.BOUND[f]["lift"] if g == "bound"
           else m.SETTLE_SHIFT[1] if pose == "settle" else 0)
@@ -273,11 +292,13 @@ def leg_runs(pose, g, f):
         for a, b in zip(xs, xs[1:]):
             run = run + 1 if b == a + 1 else 1
             if run > 2: yield (pose, g, f, y, xs)
-wide = sorted({w[:3] for pose, g in (("stand", "walk"), ("stand", "trot"), ("stand", "bound"), ("settle", None))
+wide = sorted({w[:3] for pose, g in (("stand", "trot"), ("stand", "bound"), ("settle", None))
                for f in range(4) for w in leg_runs(pose, g, f)})
-MERGED = 14
-ck("56 leg merges: no more frames than the known %d" % MERGED, len(wide) <= MERGED,
-   "%d of 16 frames have a leg row wider than 2: %s" % (len(wide), ", ".join("%s %s %d" % (p, g or "parked", f) for p, g, f in wide) or "none"))
+MERGED = 10
+ck("56 the walk never half-covers a leg or touches same-tone legs; trot, bound and settle no worse than the known %d frames" % MERGED,
+   not partial and not same_touch and len(wide) <= MERGED,
+   "walk partial covers: %s; same-tone touches: %s; %d of 12 other frames with a leg row wider than 2: %s" % (
+       partial[:4] or "none", same_touch[:4] or "none", len(wide), ", ".join("%s %s %d" % (p, g or "parked", f) for p, g, f in wide) or "none"))
 # Tips generated from the user's own bindings.lua replace the curated tip for
 # a key the user rebound and add the rest. Afterwards no key may be covered
 # twice and every id must be unique. Run against the real file when there is

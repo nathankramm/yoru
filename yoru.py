@@ -333,7 +333,7 @@ def theme_stamp():
 # The walk: each foot lands on its own, in lateral sequence -- near hind,
 # near fore, far hind, far fore -- a quarter of the stride apart, and three
 # feet are on the ground at almost any moment. One leg per frame is in the
-# air here, knee bent, coming forward; the other three are planted: just
+# air here, lifted; the other three are planted: just
 # landed at reach, under, and pushing off. No bob; a walk is level, head
 # included. A walking quadruped's head does nod, once per foreleg, and it
 # was drawn -- WALK_NOD dropped the skull one row on frames 1 and 3. At
@@ -343,31 +343,56 @@ def theme_stamp():
 # stride it was frequent noise on top of legs that already read as
 # walking. Removed for that reason; don't add it back for accuracy.
 #
-# Known flaw: the legs merge. They are 2px columns one column apart
-# within a pair (near hind x 3-4, far hind 6-7; far fore 10-11, near fore
-# 13-14) and the lower offsets swing +-2, so any frame that shifts a pair
-# toward each other closes the gap: walk frame 0 row 21 is one 4-wide
-# block at x 4-7, frame 3 is x 11-14, and frames 1 and 2 overlap outright.
-# The trot and bound do the same; audit check 56 counts the frames. It
-# is arithmetic, not a table error: near and far of a pair are half a
-# stride apart, so their relative swing is twice the range, and at +-1 a
-# pair still needs five columns and four legs eighteen, against a
-# thirteen-column underside. The fix that satisfies it was built and
-# reverted (2026-09-16): +-1 offsets, the legs respaced to x 3, 7, 11, 15
-# with the far legs' swing clamped away from their near mate and static
-# outside the walk. Every frame was clean at 16x. At 4px four evenly
-# spaced posts with a gap between each read as insect legs: a deer shows
-# two clustered pairs, and the clustering is what the merge is the price
-# of. Also part of it: the swing frame as a straight lift rather than a
-# bent knee, because the whole upper leg beside an offset lower is a
-# 3-wide run too. The merge is less wrong than the alternatives found so
-# far; a fix has to keep the pairs clustered.
-WALK = [
-    dict(d1=0, d2=1, up=1),      # swinging: lifted, coming forward
-    dict(d1=1, d2=2, up=0),      # reaching, just landed
-    dict(d1=0, d2=0, up=0),      # under
-    dict(d1=-1, d2=-2, up=0),    # pushing off
-]
+# The legs: 2px columns one column apart within a pair (near hind x 3-4,
+# far hind 6-7; far fore 10-11, near fore 13-14), and the near leg draws
+# last. That clustering is deliberate -- a deer shows two pairs, and an
+# even respacing to x 3, 7, 11, 15 was built and reverted (2026-09-16) for
+# reading as insect legs at 4px, four posts with a gap between each --
+# and it means a pair crosses twice a stride. Manning Krull, on sprites
+# 24 pixels high or smaller: the standard tiny walk is frames with the
+# legs apart and frames with them close together or overlapped, the
+# near leg brighter. Two rules follow, and audit check 56 holds the walk
+# to both. A far leg may be fully covered, never partly: the near leg
+# wins a shared column, so a far leg with one column still showing is a
+# tone boundary inside the pair, one thick leg with a dark edge. And
+# legs of one tone never touch: bright against dim reads as two legs at
+# 4px in every shipped theme (measured on everforest, the closest pair
+# of tones), but dim against dim is one wide dim shape.
+#
+# Hence the offsets, straight legs, one table per leg. Fully covered is
+# the reaching near leg landing exactly on the pushing far one, so the
+# two offsets sum to the three columns between them: near hind reach +2
+# on far hind push -1, far fore reach +1 under near fore push -2. The
+# near fore reaches only +1 because +2 puts it at x 15-16, one column
+# proud of the body's bottom row (x 2-15), a notch at the top of the leg
+# -- the same defect the belly attempt had at the rear -- and the near
+# hind pushes only -1 for the mirror reason. The far legs swing +-1
+# because a far hind reaching +2 lands against the far fore, dim on dim.
+# That is stride 3 on the near legs and 2 on the far, against 4 on the
+# old diagonal table (reach (1,2), push (-1,-2)), whose diagonal made
+# every crossing a partial cover: 14 shared cells across the four
+# frames. Nothing touches at all now, in any frame. The swing is a
+# straight lift for the same reason: a swinging leg with its lower
+# offset lands beside a neighbour.
+#
+# Rejected the same night: a strict no-shared-column rule (pairs three
+# columns apart force |near| + |far| <= 1 in the crossing frame, capping
+# total stride at 2); one table for all legs with reach +2 and push -1
+# (the near fore's notch, and the far hind against the far fore in frame
+# 3); and +-1 on the near legs, which lost the visible motion -- the near
+# leg's reach is the stride.
+#
+# Open, and only judgeable running: frames 0 and 1 show three legs, the
+# far one fully covered, which is right but might read as a dropped
+# frame in motion; and the near legs are asymmetric, hind +2/-1 against
+# fore +1/-2, which might read as a limp.
+WALK = dict(          # each leg's offset, in phase order: lifted, reaching, under, pushing off
+    nr=(0, 2, 0, -1),
+    nf=(0, 1, 0, -2),
+    fr=(0, 1, 0, -1),
+    ff=(0, 1, 0, -1),
+)
+WALK_UP = (1, 0, 0, 0)
 WALK_PHASE = dict(nr=0, nf=1, fr=2, ff=3)
 # Sprite pixels of travel per frame of each gait; four frames to a stride.
 WALK_STEP, BOUND_STEP = 2.2, 3.2
@@ -504,8 +529,8 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, gait=None, chew=0, doze=0)
         legs = dict(nr=(s["r1"], s["r2"], 0), nf=(s["f1"], s["f2"], 0),
                     fr=(s["r1"], s["r2"], 0), ff=(s["f1"], s["f2"], 0))
     elif walking:
-        legs = {k: (WALK[(frame - p) % 4]["d1"], WALK[(frame - p) % 4]["d2"],
-                    WALK[(frame - p) % 4]["up"]) for k, p in WALK_PHASE.items()}
+        legs = {k: (WALK[k][(frame - p) % 4], WALK[k][(frame - p) % 4],
+                    WALK_UP[(frame - p) % 4]) for k, p in WALK_PHASE.items()}
     else:
         table = BOUND if bound else TROT
         near, far = table[frame], table[(frame + 2) % 4]

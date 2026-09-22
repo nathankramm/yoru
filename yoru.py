@@ -615,6 +615,404 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, gait=None, chew=0, doze=0)
     return out
 
 
+# ------------------------------------------------------------ characters ----
+# A second character, drawn. Nothing reads it yet: the Pet learns to wear
+# a character next, and the tools learn to draw him there too. What a
+# character is, is a `pixels` function with the deer's signature -- the
+# deer's is pixels() above, code all the way down; The Dane's is a map, a
+# palette of roles and a pose table below.
+#
+# The Dane is named in honour of Omarchy's creator. Same tone as the deer:
+# ordinary things done with total seriousness. Nothing goofy.
+#
+# The map. Each letter is a role, not a colour, so one character map can
+# be worn by any theme. Skin, hair and beard are natural colours and stay
+# put; the clothes, eye and chest mark come from the theme through the
+# same derived tones the deer wears, so one apply_theme() recolours both
+# animals. 48x48, front view, faces the viewer: the source figure, with
+# the chest mark a plain letter O in the theme's accent, a two-pixel
+# stroke with the corners off so it reads as a bold O and not a zero --
+# generic, not the Omarchy frame. He is drawn seated behind a desk (see
+# the scene), so rows 35-47 -- the standing legs and shoes -- are used
+# only for the shins and shoes under the desk, and the figure's hanging
+# forearms (rows 27-33) are shirt and trousers here: seated, his arms
+# are drawn to the desk.
+#
+# A side profile and a quarter-turn frame were drawn from this map and
+# are gone (2026-09-21), with the turn path between them and the
+# mirroring: the scene is front-facing and stationary now, and a desk
+# seen from the side mirrored to face the corner put his back to the
+# room at the cost of the one thing a person at a desk shows, his face.
+# What they had settled, for the record: the profile had one short brow
+# over the one eye, the nose breaking the outline, the beard a band
+# from the chin back and up to under the ear, the hair at collar length
+# at the back; the quarter frame had the far eye's corner, the nose
+# breaking the outline, the O foreshortened to four columns; the turn
+# was side, lid closed, quarter, front, one TURN_SECS a step. All read
+# at 2x and 4x.
+DANE_FRONT = [
+    "................................................",
+    "..................HHHHHHhhhH....................",
+    "................HHHhhhHHHhhhHH..................",
+    "...............HHhhHHHHdHHHHHHH.................",
+    "..............HHhHHHHddHHhhhhhH.................",
+    "..............HhhHHHKKKKKKKKKKH.................",
+    "..............HhHHHHKKKKKKKKKKHH................",
+    "..............HHHdHHKKKKKKKKKKHH................",
+    "..............HHHdHdkKHHKKHHHKHH................",
+    ".............hhHHHHdkKWEKKWEKKHH................",
+    ".............hHHdHHdkKKKKKKKKKHH................",
+    "..............HHdHHdkKKKKKkKKKH.................",
+    "..............hhHHHdkKKKKKKkkKK.................",
+    "..............hHHdHdkKKRRRRRRKH.................",
+    ".............HHHHdHdRRRKKkkkKRHH................",
+    "............hhHHHHHdRRRKKKKKKRHH................",
+    "............hHHdHHHdRRHRRRHRRRHH................",
+    ".............HHdHHHHHRRRHRRRHRHH................",
+    ".............hhHHHHH...kkkkk.HHHh...............",
+    "...............HHH.....kKKKK..HH................",
+    "................HHSSSSSkKKKKSSHH................",
+    "................SSSSSSSSSSSSSSss................",
+    "................FFSSSSSSSSSSSSSs................",
+    "................FFSSSSAAAASSSSSS................",
+    "................FFSSSAAAAAASSSSS................",
+    "................FFSSSAASSAASSSSS................",
+    "................FFSSSAASSAASSSSS................",
+    "................SSSSSAASSAASSSSS................",
+    ".................SSSSAAAAAASSSS.................",
+    ".................SSSSSAAAASSSSS.................",
+    ".................SSSSSSSSSSSSSS.................",
+    ".................SSSSSSSSSSSSSS.................",
+    ".................SSSSSSSSSSSSSS.................",
+    "..................PPPPPPPPPPPP..................",
+    "...................PPPPPPPPPP...................",
+    "...................FFF.PPPP.....................",
+    "...................FFF.PPPP.....................",
+    "...................FFF.PPPP.....................",
+    "...................FFF.PPPP.....................",
+    "...................FFF.PPPP.....................",
+    "...................FFF.PPPP.....................",
+    "...................FFF.PPPP.....................",
+    "...................FFF.PPPP.....................",
+    "...................FFF.PPPP.....................",
+    "...................FFF.PPPP.....................",
+    "...................FFF.PPPP.....................",
+    "..................BBBB.BBBBBB...................",
+    "..................BBBB.BBBBBB...................",
+]
+
+# The fixed roles, sampled from photographs in daylight: skin from the
+# forehead, its shadow from the far cheek, hair from the side, the
+# beard as hair blended toward skin (stubble, not a grey beard). The two
+# interior tones -- the hair's shadow, the eye's white -- never touch the
+# silhouette and are never nudged.
+DANE_NATURAL = {
+    "K": rgb("d79a85"),   # skin
+    "k": rgb("b27d6c"),   # skin shadow: neck, far arm, under the nose
+    "H": rgb("5e3e2b"),   # hair
+    "h": rgb("8e6644"),   # hair highlight
+    "R": rgb("8a6249"),   # beard
+}
+DANE_INTERIOR = {
+    "d": rgb("452b1e"),   # hair shadow, inside the mass and along the hairline
+    "W": rgb("f2ece6"),   # eye white
+}
+# How close a fixed colour may sit to the theme background before it is
+# nudged. The halo around him is the background, so a colour that matches
+# it has no edge: dark hair on a dark theme, pale skin on a light one.
+# WCAG contrast ratio, since a luminance difference is meaningless in
+# the dark: 1.6 is where the edge went soft on the Tokyo Night sheet,
+# 1.8 is where it was clearly there. The nudge is toward white on a dark
+# background and toward black on a light one, by the least that meets
+# the target, so the colour stays the colour on every theme that lets it.
+NATURAL_MIN, NATURAL_TARGET = 1.6, 1.8
+_natural_cache = {}
+
+
+def _contrast(a, b):
+    la, lb = _lum(a) + 0.05, _lum(b) + 0.05
+    return la / lb if la > lb else lb / la
+
+
+def natural_palette(fixed, bg):
+    """`fixed` nudged away from `bg` where the two would merge."""
+    key = (tuple(sorted(fixed.items())), bg)
+    hit = _natural_cache.get(key)
+    if hit is not None:
+        return hit
+    away = (1, 1, 1) if _lum(bg) < 0.5 else (0, 0, 0)
+    out = {}
+    for k, c in fixed.items():
+        if _contrast(c, bg) < NATURAL_MIN:
+            t = 0.0
+            while _contrast(c, bg) < NATURAL_TARGET and t < 1.0:
+                t += 0.02
+                c = _blend(fixed[k], away, t)
+        out[k] = c
+    _natural_cache[key] = out
+    return out
+
+
+def dane_palette():
+    """Roles to colours for the current theme. The theme roles are the
+    deer's own derived tones: on Tokyo Night that is exactly the drawing's
+    original palette (shirt a9b1d6, highlight c0caf5, pants 8990af, far
+    limb 676c85, shoes 414868), which is why those were chosen."""
+    pal = dict(natural_palette(DANE_NATURAL, OUTLINE))
+    pal.update(DANE_INTERIOR)
+    pal.update(S=PAL["b"], s=PAL["c"], P=PAL["a"], F=FAR, E=PAL["e"], A=PAL["e"])
+    # The shoes are the hooves' tone, the theme's `muted`, and on three
+    # shipped themes (rose-pine, catppuccin-latte, flexoki-light) that
+    # sits close enough to the background to lose its edge. The deer's
+    # standing hooves have the same exposure and nothing corrects them;
+    # here the shoes get the natural colours' nudge, since a man with no
+    # feet reads worse than a deer with faint hooves.
+    pal["B"] = natural_palette({"B": HOOF}, OUTLINE)["B"]
+    return pal
+
+
+# The scene. He lives at a desk, facing you. The roam, the walk and the
+# ground-sit were drawn and are gone (2026-09-21): wandering out and back
+# is grazing behaviour, right for an animal, and a man doing it read as
+# pacing, or a sentry on patrol -- and a man at a desk has nowhere to
+# walk to. What the walk had settled, for the record: four frames,
+# contact / passing / contact / passing, the lead leg straight with the
+# heel down and the trailing leg bent with the heel up, the legs taking
+# turns so the far leg was in front on every second step, the near arm
+# swinging against the near leg, no body dip; and the sit was on the
+# ground, knees up at 45 degrees, hips on the ground row, through a
+# crouch. Both read at 2x and 4x. Neither is what a person at a desk
+# does, so neither is kept.
+#
+# The turn-away, and why a front view still honours it. Swartz's finding
+# is about an agent that appears to watch the user, and gaze is what
+# signals watching. The deer has no gaze to speak of, so his body does
+# the work: he parks facing the corner and turns to speak. The Dane has
+# eyes, and while he works they are down, on the laptop -- he is not
+# watching you. So the meaningful change is his eyes, not his body: eyes
+# down working, eyes up to speak. The scene does not mirror when he is
+# dragged; dragging moves it.
+#
+# Front view, canvas 56x48. From the back: the chair back, him seated
+# with the desk in front of him -- a tabletop on two slim legs in the far
+# tone, his legs showing beneath, seated and still: the knees coming
+# toward you as two blocks over the lap, the shins and shoes below --
+# the laptop open on the desk facing him, so what shows is the back of
+# the lid, plain, no logo, and the mug beside it. Props take the theme
+# through the same derived tones as his clothes. Speaking, he closes the
+# laptop -- the lid folds down toward him over two frames -- looks up at
+# you, and speaks; when the bubble clears he opens it again and his eyes
+# go back down. Closing the laptop is the point: he stops what he is
+# doing to address you.
+#
+# The states the Pet walks between working and speaking, one TURN_SECS
+# each: the Pet calls them views and the deer has none. "work" is the
+# lid open and the eyes down; "folding" and "closing" are the lid on its
+# way, eyes still down; "speak" is the lid shut and the eyes up.
+#
+# There was one frame of fold, not two, and the lid went seven rows tall
+# to three in a single 150ms step: at 2x that is eight screen pixels of
+# laptop disappearing between two frames, and it read as a cut, not as a
+# lid coming down. Two frames make the fold 7-5-3-1 and every step of it
+# the same size. Watched as motion rather than as a sheet, that is the
+# whole difference between a gesture and an edit.
+DANE_VIEWS = ("work", "folding", "closing", "speak")
+DANE_TURN = DANE_VIEWS
+# Held long enough to be a position the eye lands on. At 0.15 the four
+# frames of the fold ran past in six tenths of a second and read as one
+# blurred move.
+TURN_SECS = 0.20
+# Where the map lands in the scene: (dx, dy), and the last map row drawn
+# for the body -- the desk covers the rest, and the legs are drawn from
+# rows 42-47 of the map where they land.
+DANE_SEAT, DANE_SEAT_ROWS = (4, 4), 34
+# The eyes, and the posture that carries them. Speaking, the map's own:
+# white behind, iris forward, at us. Working, the lids come down over
+# that row in the skin shadow and the iris shows a row lower, looking
+# down at the screen -- and that alone did not read at 2x, the working
+# face looked like the speaking face. So the head tilts down a row, the
+# hair with it, and the brows drop one more onto the lid row, so the
+# eyes are tucked under them. That carries it. (x, y) in map coordinates.
+#
+# No screen glow on his face. It was drawn -- six pixels of the accent
+# on the lower face and beard while the lid was up, shifting by a pixel
+# or two every few seconds as screen light does -- and removed
+# (2026-09-22): on a theme with a green accent it read as a rash, as
+# something going wrong with him, and any coloured light on a face has
+# the same problem at this size. Nothing on his face is ever the accent
+# but the iris. While he works his only motion is the blink; the
+# forearms are still because forearms are, when you type, and the
+# fingers are behind the lid.
+EYES = dict(far=((22, 9), (23, 9)), near=((26, 9), (27, 9)))       # (white, iris) per eye
+HEAD_ROWS, HAIR_ROWS, TILT, BROW_DROP = 19, 22, 1, 1
+BROWS = [(x, 8) for x in range(15, 33) if DANE_FRONT[8][x] == "H"]
+# Props, in scene pixels. Desk: the tabletop and its two legs. Laptop: a
+# lid tall enough to read at 2x, its back to us, on a base one column
+# wider each side; the closing frame is the lid foreshortened, folding
+# away from us toward him; closed, it is a slab. Mug: five wide, six
+# tall, a handle, a row of coffee. Chair back: behind him, what shows of
+# it shows around his hair.
+DESK_TOP, DESK_LEGS = (34, 35, 6, 49), [(36, 47, 7, 8), (36, 47, 47, 48)]
+# The lid stops below his shoulders and is narrower than they are -- a
+# laptop is about three quarters of a man across -- and its rim is a
+# pixel of the far tone: as wide as his shoulders with no rim it read as
+# a dark shirt, not a laptop. The base is the lid's width: a keyboard is
+# no wider than its screen.
+LAPTOP_BASE = (33, 33, 22, 33)
+LAPTOP_LID = dict(work=(26, 32, 22, 33), folding=(28, 32, 22, 33),
+                  closing=(30, 32, 22, 33), speak=(32, 32, 22, 33))
+MUG, MUG_HANDLE, MUG_COFFEE = (28, 33, 40, 44), [(29, 45, 46), (30, 46, 46), (31, 45, 46)], (28, 41, 43)
+CHAIR = (21, 33, 20, 35)
+SEATED_KNEES = [((36, 38, 22, 25), "F"), ((36, 38, 28, 32), "P")]
+# The arms: from the elbows, outside the lid, the forearms angle down
+# and in and go behind it, and the hands with them -- from the front
+# nothing of them shows, and nothing moves. Hands were drawn first as
+# wrists either side of the base and read as floating dots outside the
+# lid; a keyboard is no wider than its screen, so they are behind it.
+# (row, x0, x1) in scene pixels, drawn before the lid, which hides the
+# rest of each band.
+FOREARMS = [([(30, 35, 36), (31, 34, 35), (32, 33, 34)], "K"),
+            ([(30, 20, 21), (31, 21, 22), (32, 21, 22)], "k")]
+# Head down on folded arms, for snooze and away: the laptop closed, the
+# arms crossed on the desk in front of it, the head on the arms -- the
+# top of it to you, a little forehead showing under the fringe. Nothing
+# of the eyes, so the deer's doze cycle has nothing to shut: it runs,
+# and shows nothing. The settle frame between is the head four rows
+# down with the arms coming onto the desk; a translation, not a nod, and
+# at one DANE_SETTLE_SECS it reads as going down.
+HEAD_DOWN = [(23, 24, 31), (24, 22, 33), (25, 21, 34), (26, 21, 34), (27, 21, 34), (28, 21, 34),
+             (29, 22, 33), (30, 23, 32)]                               # (row, x0, x1) of hair
+HEAD_DOWN_HIGHLIGHT, HEAD_DOWN_FACE = [(24, 25, 28), (25, 30, 32), (27, 22, 23)], [(31, 24, 31)]
+ARMS_FOLDED = [((30, 31, 18, 38), "k"), ((31, 33, 16, 40), "K")]       # far under, near over
+HEAD_DOWN_BODY_FROM = 20                                               # map row: shoulders, no head
+# Named for him, not SETTLE_*: the deer has a SETTLE_HEAD of his own, a
+# few hundred lines up, and a second one here quietly replaced it and
+# moved his resting head two pixels. One file, one namespace.
+DANE_SETTLE_HEAD, DANE_SETTLE_ARMS = (0, 4), [((30, 32, 15, 41), "K")]
+# The settle moves him down four rows, but only the part of him that is
+# above the desk: a man leaning onto a desk moves his shoulders, not his
+# hips, and the lap and knees under the tabletop stay where they were.
+# It used to shift all of him, and four rows was exactly enough to walk
+# the bottom of the O on his chest out from behind the desk and leave two
+# pixels of the accent sitting under the table between his knees. From
+# this map row down he is behind the desk and does not move.
+DANE_SETTLE_LAP = 28
+# His settle frame is held longer than the deer's 150ms. The deer's
+# settle is a small move -- the same animal, five rows down -- and 150ms
+# is plenty for it. This one is the front view on its way to being the
+# top of a head, and at 150ms the eye did not get to it before it was
+# gone: what you saw was the man, then a shape on the desk.
+DANE_SETTLE_SECS = 0.26
+
+
+def _rect(out, y0, y1, x0, x1, col):
+    for y in range(y0, y1 + 1):
+        for x in range(x0, x1 + 1):
+            out.append((x, y, col))
+
+
+def _dane_man(out, pal, gaze, blink, doze, rows_to=DANE_SEAT_ROWS, shift=(0, 0), rows_from=0):
+    dx, dy = DANE_SEAT[0] + shift[0], DANE_SEAT[1] + shift[1]
+    down = {}
+    if gaze == "down":
+        for white, iris in EYES.values():
+            down[white] = "k"; down[iris] = "k"
+            down[(iris[0], iris[1] + 1)] = "E"
+        for p in BROWS:
+            down[p] = "K"                  # the brow leaves its row...
+        for x, y in BROWS:
+            down[(x, y + BROW_DROP)] = "H"  # ...and lands on the lids
+    tilt = TILT if gaze == "down" else 0
+    for y, row in enumerate(DANE_FRONT[:rows_to + 1]):
+        if y < rows_from:
+            continue
+        for x, ch in enumerate(row):
+            ch = down.get((x, y), ch)
+            if ch == ".":
+                continue
+            col = pal[ch]
+            if ch in "EW" and (blink or doze):
+                col = pal["k"] if doze else pal["K"]
+            ty = tilt if y <= HEAD_ROWS or (y <= HAIR_ROWS and ch in "Hhd") else 0
+            out.append((x + dx, y + dy + ty, col))
+
+
+def _dane_legs(out, pal):
+    for (y0, y1, x0, x1), role in SEATED_KNEES:
+        _rect(out, y0, y1, x0, x1, pal[role])
+    dx = DANE_SEAT[0]
+    for y in range(39, 48):
+        for x, ch in enumerate(DANE_FRONT[y]):
+            if ch != ".":
+                out.append((x + dx, y, pal[ch]))
+
+
+def _dane_desk(out, pal, lid):
+    _rect(out, *DESK_TOP, pal["P"])
+    for leg in DESK_LEGS:
+        _rect(out, *leg, pal["F"])
+    _rect(out, *LAPTOP_BASE, pal["F"])
+    y0, y1, x0, x1 = LAPTOP_LID[lid]
+    _rect(out, y0, y1, x0, x1, pal["F"])                # the rim...
+    if y1 - y0 >= 2:
+        _rect(out, y0 + 1, y1, x0 + 1, x1 - 1, pal["B"])   # ...around the lid's back
+    _rect(out, *MUG, pal["s"])
+    for y, x0, x1 in MUG_HANDLE:
+        _rect(out, y, y, x0, x1, pal["s"])
+    _rect(out, MUG_COFFEE[0], MUG_COFFEE[0], MUG_COFFEE[1], MUG_COFFEE[2], pal["F"])
+
+
+def _dane_arms(out, pal):
+    for band, role in FOREARMS:
+        for y, x0, x1 in band:
+            _rect(out, y, y, x0, x1, pal[role])
+
+
+def _dane_head_down(out, pal, blink, settling):
+    if settling:
+        _dane_man(out, pal, "down", blink, 0, rows_to=DANE_SETTLE_LAP - 1,
+                  shift=DANE_SETTLE_HEAD)
+        _dane_man(out, pal, "down", blink, 0, rows_from=DANE_SETTLE_LAP)
+        for (y0, y1, x0, x1), role in DANE_SETTLE_ARMS:
+            _rect(out, y0, y1, x0, x1, pal[role])
+        return
+    _dane_man(out, pal, "down", blink, 0, rows_from=HEAD_DOWN_BODY_FROM)
+    for (y0, y1, x0, x1), role in ARMS_FOLDED:
+        _rect(out, y0, y1, x0, x1, pal[role])
+    for y, x0, x1 in HEAD_DOWN:
+        _rect(out, y, y, x0, x1, pal["H"])
+    for y, x0, x1 in HEAD_DOWN_HIGHLIGHT:
+        _rect(out, y, y, x0, x1, pal["h"])
+    for y, x0, x1 in HEAD_DOWN_FACE:
+        _rect(out, y, y, x0, x1, pal["k"])
+
+
+def dane_pixels(frame, blink, pose="stand", ear=0, tail=0, gait=None, chew=0, doze=0,
+                view="work", tic=0):
+    """One frame of The Dane. The deer's signature plus `view` (work,
+    closing, speak), so draw_sprite and the audit call either without
+    knowing which. Ear, tail, chew and tic are the deer's and other
+    characters' tics and do nothing here; blink and doze close the eyes.
+    Drawn back to front, later pixels over earlier, as draw_sprite paints
+    them."""
+    pal = dane_palette()
+    out = []
+    resting = pose in ("rest", "settle")
+    lid = "speak" if resting else view
+    y0, y1, x0, x1 = CHAIR
+    _rect(out, y0 + 1, y1, x0, x1, pal["B"])
+    _rect(out, y0, y0, x0 + 1, x1 - 1, pal["B"])
+    if resting:
+        _dane_head_down(out, pal, blink, pose == "settle")
+    else:
+        _dane_man(out, pal, "up" if view == "speak" else "down", blink, doze)
+        _dane_arms(out, pal)
+    _dane_legs(out, pal)
+    _dane_desk(out, pal, lid)
+    return out
+
+
+
 # ------------------------------------------------------------- knowledge ----
 TERM = ("foot", "alacritty", "ghostty", "kitty", "wezterm")
 NVIM = ("nvim", "neovim", "lazyvim")

@@ -876,7 +876,7 @@ ck("57 two characters, the deer the default, each with a canvas, a scale, a roam
 # shift, the bound's lift), by the margins check 26 allows; The Dane's
 # scene stays inside his, so a wider canvas later is a data change.
 c = chars["dane"]
-DANE_POSES = ("stand", "rest", "settle") + m.COFFEE_PATH + m.BEARD_PATH
+DANE_POSES = ("stand", "morph", "rest", "settle") + m.COFFEE_PATH + m.BEARD_PATH
 def dane_frames():
     for view in c.turn:
         for pose in DANE_POSES:
@@ -957,7 +957,8 @@ for k, pts in dane_frames():
         gaze[k] = "accent on the face at %s" % face[:3]; continue
     shut = all(comp.get((i[0] + dx, i[1] + dy)) in (K, kk) for _, i in ((fw, fi), (nw, ni)))
     gaze[k] = "up" if up else "down" if down else "hidden" if k[1] == "rest" else "shut" if shut else "?"
-want_lid = {k: "speak" if k[1] in ("rest", "settle") else k[0] for k in lids}
+# shut with his head down, and shut while he is changing: see the swap
+want_lid = {k: "speak" if k[1] in ("rest", "settle", "morph") else k[0] for k in lids}
 far_ref = next(v[0] for k, v in hands.items() if v is not None and k[1] == "stand")
 want_open = {k: None if hands[k] is None else (far_ref, False) for k in lids}
 # and the near arm: an idle pose draws a different frame from the working
@@ -972,7 +973,8 @@ steps = [a - b for a, b in zip(fold, fold[1:])]
 # rest hides the eyes; a blink or a doze shuts them; the settle frame looks down
 # (a doze is a rest thing: the Pet never dozes elsewhere, and the settle ignores it)
 want_gaze = {k: "hidden" if k[1] == "rest" else "shut" if (k[2] or (k[3] and k[1] != "settle"))
-             else "up" if k[0] == "speak" and k[1] != "settle" else "down" for k in gaze}
+             else "up" if k[0] == "speak" and k[1] not in ("settle", "morph")
+             else "down" for k in gaze}
 ck("60 the desk: tabletop clean, his legs on the chair beneath it; the lid is the view's and a slab to speak or rest, and folds in even steps; the near forearm at the keys only while he works, the far one always, both still; eyes down for everything but speaking",
    not through and lids == want_lid and hands == want_open and gaze == want_gaze
    and not moved and len(fold) >= 4 and len(set(steps)) == 1 and steps[0] > 0,
@@ -1024,23 +1026,34 @@ sw.set_application_id("dev.local.yoru.audit")     # nt above still holds the rea
 sw.set_flags(Gio.ApplicationFlags.NON_UNIQUE); sw.register()
 m.visible = True; m._on_swap.clear(); sw.do_activate()
 sw.pet.place(1920, 1080); sw.pet.present_until = 1e9
+sw.pet.seen = {"a-tip", "another"}              # tips he has already spent
 was = (sw.pet.character.name, sw.pet.x, sw.pet.y + sw.pet.h, sw.pet.dir, sw.pet.snooze_until, sw.pet.px)
+was_home, was_seen = (sw.pet.home_x, sw.pet.home_y + sw.pet.h), set(sw.pet.seen)
 m.request_swap()                                # exactly what the signal calls
-seen_poses = []; keys = set()
-for _ in range(12):
+seen_poses = []; keys = {sw.pet.render_key()[-1]}; morph_keys = []
+for _ in range(120):                            # the dissolve, then the laptop opening
     sw.tick(); seen_poses.append(sw.pet.pose); keys.add(sw.pet.render_key()[-1])
+    if sw.pet.pose == "morph":
+        morph_keys.append(sw.pet.render_key())
     time.sleep(0.02)
+    if sw.pet.character.name != was[0] and sw.pet.view == sw.pet.character.turn[0]:
+        break
 now_ = (sw.pet.character.name, sw.pet.x, sw.pet.y + sw.pet.h, sw.pet.dir, sw.pet.snooze_until, sw.pet.px)
+kept = ((sw.pet.home_x, sw.pet.home_y + sw.pet.h) == was_home and set(sw.pet.seen) == was_seen)
 saved = m.read_state().get("sprite")
 again = m.Pet(types.SimpleNamespace(**dict(vars(O), scale=None, sprite=m.sprite_choice(None))), m.KNOWLEDGE)
 flagged = m.sprite_choice("yoru"); flagged_saved = m.read_state().get("sprite")
-ck("63 swap switches the running character through the settle, same spot, feet on the ground, same facing; it persists",
+ck("63 the swap dissolves one character into the other in a running app, same spot, feet on the ground, same facing; the snooze, the home and the tips he has spent come through it; it persists",
    was[0] == "yoru" and now_[0] == "dane" and now_[1:5] == was[1:5] and (was[5], now_[5]) == (4, 2)
-   and "settle" in seen_poses and seen_poses[-1] == "stand" and keys == {"yoru", "dane"} and saved == "dane"
+   and "morph" in seen_poses and "settle" not in seen_poses and seen_poses[-1] == "stand"
+   and keys == {"yoru", "yoru>dane", "dane"} and kept and saved == "dane"
+   and len(morph_keys) == len(set(morph_keys))
    and again.character.name == "dane" and flagged == "yoru" and flagged_saved == "yoru",
-   "%s @%dx -> %s @%dx; poses %s; x and ground line kept %s; state.json %r; next start %s; --sprite yoru -> %s saved %r" % (
-       was[0], was[5], now_[0], now_[5], "".join("s" if p == "settle" else "." for p in seen_poses),
-       now_[1:5] == was[1:5], saved, again.character.name, flagged, flagged_saved))
+   "%s @%dx -> %s @%dx over %d frames; poses %s; x and ground line kept %s; snooze, home and seen kept %s; render keys %s, all %d dissolve frames distinct %s; state.json %r; next start %s; --sprite yoru -> %s saved %r" % (
+       was[0], was[5], now_[0], now_[5], len(seen_poses),
+       "".join("~" if p == "morph" else "." for p in seen_poses),
+       now_[1:5] == was[1:5], kept, sorted(keys), len(morph_keys),
+       len(morph_keys) == len(set(morph_keys)), saved, again.character.name, flagged, flagged_saved))
 # Canvas and scale follow the character. A taller stand-in swapped in
 # keeps the feet on the ground line: the bottom edge stays, the top
 # rises, and w/h and the input region come from the new canvas at the
@@ -1050,11 +1063,15 @@ m.SPRITES["tall"] = tall
 try:
     p = sw.pet; bottom = p.y + p.h; hb = p.home_y + p.h
     p.request_swap("tall"); p.pose = "stand"
-    for _ in range(24): sw.tick(); time.sleep(0.02)   # his settle is longer than the deer's
+    for _ in range(90):                               # the laptop folds, then the dissolve
+        sw.tick(); time.sleep(0.02)
+        if p.character.name == "tall": break
     grew = (p.character.name == "tall" and p.px == 3 and p.h == 64 * 3 and p.y + p.h == bottom
             and p.home_y + p.h == hb)
     p.request_swap("dane")
-    for _ in range(24): sw.tick(); time.sleep(0.02)
+    for _ in range(90):
+        sw.tick(); time.sleep(0.02)
+        if p.character.name == "dane": break
     back = p.character.name == "dane" and p.px == 2 and p.y + p.h == bottom
 finally:
     del m.SPRITES["tall"]
@@ -1312,5 +1329,99 @@ for k, pts in dane_frames():
 ck("70 the accent is his irises and the O on his shirt, and nothing else in the scene is ever it, in any view or pose",
    not loose, "%d frames, %d irises among them; loose accent at %s"
    % (sum(1 for _ in dane_frames()), irises, loose[:3] or "none"))
+# The dissolve, measured. The swap is the one moment the user is watching
+# for -- it is the whole feedback for a keypress -- so this is about what
+# it costs and what survives it rather than about what it looks like; the
+# looking was done with tools/render-demo.py --acts swap.
+DTS = .033
+def one_swap(start, snoozed=False, secs=3.0):
+    """Drive a Pet through a swap, recording what would actually be drawn
+    on every frame of it."""
+    random.seed(4)
+    q = m.Pet(types.SimpleNamespace(**dict(vars(O), scale=None, sprite=start)), m.KNOWLEDGE)
+    q.seen = {"a-tip"}; q.place(1920, 1080); q.present_until = 1e9; q.next_talk = 1e9
+    quiet_idles(q)
+    t = 0.0
+    q.step(DTS, t, 1920, 1080)
+    if snoozed:
+        q.snooze_until = 1e9
+    before = (q.x, q.dir, q.y + q.h, q.home_x, set(q.seen), q.snooze_until)
+    q.request_swap()
+    rows = []
+    for _ in range(int(secs / DTS)):
+        t += DTS; q.step(DTS, t, 1920, 1080)
+        mix = None
+        if q.pose == "morph":
+            p = q.morph_progress()
+            out_all, in_all = m.sprite_pixels(q, q.character), m.sprite_pixels(q, q.morph)
+            out, into = m.morph_keep(out_all, p, True), m.morph_keep(in_all, p, False)
+            mix = (len(out) / float(len(out_all)), len(into) / float(len(in_all)),
+                   {c for _, _, c in out} | {c for _, _, c in into},
+                   {c for _, _, c in out_all} | {c for _, _, c in in_all},
+                   q.px_of(q.character), q.px_of(q.morph),
+                   q.y + q.h, q.y + q.h)          # both stand on the same line
+        rows.append((q.pose, q.view, q.character, q.morph, mix, q.render_key()))
+    after = (q.x, q.dir, q.y + q.h, q.home_x, set(q.seen), q.snooze_until)
+    return q, before, after, rows
+
+bad = []; report = []
+for start, other in (("yoru", "dane"), ("dane", "yoru")):
+    q, before, after, rows = one_swap(start)
+    mo = [i for i, r in enumerate(rows) if r[0] == "morph"]
+    if not mo:
+        bad.append((start, "never dissolved")); continue
+    held = len(mo) * DTS
+    if abs(held - m.MORPH_SECS) > DTS * 1.5:
+        bad.append((start, "the dissolve ran %.2fs, not %.2f" % (held, m.MORPH_SECS)))
+    if mo != list(range(mo[0], mo[-1] + 1)):
+        bad.append((start, "something interrupted the dissolve"))
+    # door to door: the ask, the laptop, the dissolve, the laptop again
+    done = next((i for i, r in enumerate(rows)
+                 if r[2].name == other and (not r[2].turn or r[1] == r[2].turn[0])), None)
+    door = (done + 1) * DTS if done is not None else 99.0
+    if door > 1.0:
+        bad.append((start, "the whole swap took %.2fs" % door))
+    # every frame of the dissolve is a frame that gets drawn
+    keys = [rows[i][5] for i in mo]
+    if any(x == y for x, y in zip(keys, keys[1:])):
+        bad.append((start, "a dissolve frame is never drawn"))
+    # he changes as himself: the laptop shut, the deer standing
+    if rows[mo[0]][2].turn and rows[mo[0]][1] != rows[mo[0]][2].turn[-2]:
+        bad.append((start, "his laptop was not shut: %s" % rows[mo[0]][1]))
+    if any(rows[i][0] != "morph" for i in range(mo[0], mo[-1] + 1)):
+        bad.append((start, "he was not only dissolving"))
+    # the mix: him at the start, the other at the end, both in the middle
+    first, mid, last = rows[mo[0]][4], rows[mo[len(mo) // 2]][4], rows[mo[-1]][4]
+    if not (first[0] > 0.85 and first[1] < 0.15):
+        bad.append((start, "it does not start on him: %.2f/%.2f" % first[:2]))
+    if not (last[0] < 0.15 and last[1] > 0.85):
+        bad.append((start, "it does not finish on the other: %.2f/%.2f" % last[:2]))
+    if not (0.2 < mid[0] < 0.8 and 0.2 < mid[1] < 0.8):
+        bad.append((start, "the middle is not a mix: %.2f/%.2f" % mid[:2]))
+    # nothing is blended -- every colour drawn is one of theirs, unmixed --
+    # and each keeps its own pixel size, on the one ground line they share
+    if any(not (rows[i][4][2] <= rows[i][4][3]) for i in mo):
+        bad.append((start, "a colour appeared that neither of them has"))
+    if first[4] == first[5]:
+        bad.append((start, "both drew at the same pixel size"))
+    if any(rows[i][4][6] != rows[i][4][7] for i in mo):
+        bad.append((start, "they did not share the ground line"))
+    if before[:4] != after[:4] or before[4] != after[4]:
+        bad.append((start, "something was lost: %s -> %s" % (before, after)))
+    report.append("%s->%s %d frames/%.2fs, door to door %.2fs, middle %d%%/%d%%, %dpx and %dpx"
+                  % (start, other, len(mo), held, door, mid[0] * 100, mid[1] * 100,
+                     first[4], first[5]))
+# and snoozed he still changes: he stands up for it and lies back down
+qs, before_s, after_s, rows_s = one_swap("dane", snoozed=True, secs=4.0)
+slept = [r[0] for r in rows_s]
+snoozed_ok = (before_s[5] == after_s[5] == 1e9 and "morph" in slept
+              and slept[-1] == "rest" and qs.character.name == "yoru")
+if not snoozed_ok:
+    bad.append(("snoozed", "%s, ended %s as %s" % ("morph" in slept, slept[-1], qs.character.name)))
+ck("71 the dissolve: about half a second of it, the whole swap under one, every frame of it drawn, a real mix of the two in the middle at their own pixel sizes on one ground line; nothing blended, nothing lost; snoozed, he stands up to change and lies back down",
+   not bad,
+   "%s; snoozed: he changed %s and ended %s" % ("; ".join(report) or "nothing ran",
+                                                snoozed_ok, slept[-1] if slept else "?")
+   + ("; WRONG: %s" % (bad[:3],) if bad else ""))
 sw.stop(); sw.win.destroy()
 print("\n%d/%d  FAILURES: %s" % (N - len(F), N, F or "none"))

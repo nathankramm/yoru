@@ -1110,18 +1110,79 @@ def dane_pixels(frame, blink, pose="stand", ear=0, tail=0, gait=None, chew=0, do
     pal = dane_palette()
     out = []
     resting = pose in ("rest", "settle")
-    lid = "speak" if resting else view
+    # Shut while his head is down, and shut while he is changing: he closes
+    # the laptop before he becomes a deer and opens it when he comes back,
+    # so he transforms as himself rather than mid-typing. "speak" is the
+    # only shut lid the views have and it looks up at you, which is why
+    # this is a pose and not a fifth view -- the eyes stay down.
+    lid = "speak" if resting or pose == "morph" else view
     y0, y1, x0, x1 = CHAIR
     _rect(out, y0 + 1, y1, x0, x1, pal["B"])
     _rect(out, y0, y0, x0 + 1, x1 - 1, pal["B"])
     if resting:
         _dane_head_down(out, pal, blink, pose == "settle")
     else:
-        _dane_man(out, pal, "up" if view == "speak" else "down", blink, doze)
+        # Eyes up only to speak, and changing is not speaking: without the
+        # pose test a swap asked for mid-sentence would draw him looking
+        # at you all the way through it.
+        _dane_man(out, pal, "up" if view == "speak" and pose != "morph" else "down",
+                  blink, doze)
         _dane_arms(out, pal, pose)
     _dane_legs(out, pal)
     _dane_desk(out, pal, lid, pose)
     return out
+
+
+# ------------------------------------------------------------- the swap ----
+# The deer is The Dane's spirit animal, and the swap should say so: not one
+# sprite exchanged for another but one of them becoming the other.
+#
+# It used to go through the settle frame, the same held frame he uses to lie
+# down, and a held frame between two different drawings is a cut with a
+# pause in it. This is a dissolve instead. Every sprite pixel of a character
+# has a fixed turn in [0, 1), a hash of its own coordinates; over the
+# transition a threshold sweeps from 0 to 1, the one leaving keeps the
+# pixels whose turn has not come, and the one arriving shows the pixels
+# whose turn has passed. Nothing is ever blended: a pixel is drawn or it is
+# not, which is the only way this stays pixel art. A soft cross-fade at this
+# size looks like a photograph of a sprite.
+#
+# The two of them have different canvases and different pixel sizes and that
+# is deliberately not reconciled. Each dissolves on its own grid, so the
+# deer leaves in four-pixel blocks and The Dane arrives in two-pixel ones,
+# and what you watch is one density turning into the other. They are
+# anchored where swap() leaves them -- the ground line, and the left edge --
+# so nothing moves when the dissolve finishes.
+#
+# The arriving character eases in and the leaving one does not. They are not
+# the same weight: The Dane is 1185 pixels and the deer 206, so on a
+# straight ramp a quarter of The Dane is already a head and a desk while the
+# deer is still all there, and it reads as something appearing behind him
+# rather than as him changing. Smoothstep holds the arrival back through the
+# first third and still lands it in the last frame, with no clump of pixels
+# popping in at the end. Both were drawn and watched; a ramp squared instead
+# opened a hole in the middle where neither of them was there.
+MORPH_SECS = 0.45
+# Two salts, so the two do not take their turns in the same order. With one,
+# the same corners empty and fill together and the mix reads as a wipe.
+MORPH_SALT = (0x9E3779B9, 0x85EBCA6B)
+
+
+def morph_grain(x, y, salt):
+    """The turn this sprite pixel takes in the dissolve, in [0, 1). A hash
+    rather than a table: nothing to store, nothing to seed, and the same
+    scatter on every machine and every run."""
+    h = (x * 0x1F1F1F1F ^ y * 0x2545F491 ^ salt) & 0xFFFFFFFF
+    h = ((h ^ (h >> 13)) * 0x5BD1E995) & 0xFFFFFFFF
+    return ((h ^ (h >> 15)) & 0xFFFF) / 65536.0
+
+
+def morph_keep(pts, p, leaving):
+    """The pixels of one character still drawn at progress `p`."""
+    if leaving:
+        return [q for q in pts if morph_grain(q[0], q[1], MORPH_SALT[0]) > p]
+    t = p * p * (3.0 - 2.0 * p)                      # smoothstep; see above
+    return [q for q in pts if morph_grain(q[0], q[1], MORPH_SALT[1]) <= t]
 
 
 class Idle:
@@ -1926,6 +1987,10 @@ class Pet:
         # the settle frame.
         self.character = SPRITES[getattr(opts, "sprite", None) or DEFAULT_SPRITE]
         self.swap_to = None
+        # Mid-swap: the character he is turning into, and what the dissolve
+        # has left. Both of them are drawn while this is set (see the swap).
+        self.morph = None
+        self.morph_for = 0.0
         # Which way he faces, for a character with views: side by default,
         # front while he speaks, the steps of the character's turn path
         # held TURN_SECS each between. And the character's own idle
@@ -2037,6 +2102,27 @@ class Pet:
     def h(self):
         return self.character.h * self.px
 
+    def px_of(self, ch):
+        """Screen pixels per sprite pixel for a character that is not
+        necessarily the one he is: --scale still overrides every one."""
+        return self._scale or ch.scale
+
+    def morph_progress(self):
+        """0 at the first frame of the dissolve, 1 at the last."""
+        if self.morph is None:
+            return 0.0
+        return min(1.0, max(0.0, 1.0 - self.morph_for / MORPH_SECS))
+
+    def bounds(self):
+        """The box the input region follows. Mid-swap it is both of them:
+        the two footprints differ, and a character half-drawn outside the
+        region is a character you cannot drag."""
+        w, h = self.w, self.h
+        if self.morph is not None:
+            px = self.px_of(self.morph)
+            w, h = max(w, self.morph.w * px), max(h, self.morph.h * px)
+        return int(self.x), int(self.y + self.h - h), int(w), int(h)
+
     # -- idle actions ------------------------------------------------------
     def fresh_idles(self):
         """A clock per idle action the character has, started at a random
@@ -2074,15 +2160,22 @@ class Pet:
         self.swap_to = name
         debug("swap: %s -> %s, waiting for the settle", self.character.name, name)
 
-    def swap(self, width, height):
-        """Become swap_to, keeping the spot, the facing and everything
-        else. Two characters may differ in height; the feet stay on the
-        ground line, so the top moves, not the bottom."""
+    def swap(self, width, height, into=None):
+        """Become the character the dissolve has been drawing, keeping the
+        spot, the facing and everything else. Two characters may differ in
+        height; the feet stay on the ground line, so the top moves, not the
+        bottom. A second ask that arrived during the dissolve is left
+        standing, so it takes effect on the next step."""
         was, was_h = self.character, self.h
-        self.character = SPRITES[self.swap_to]
-        self.swap_to = None
-        self.view = self.character.turn[0] if self.character.turn else "side"
-        self.turn_for = 0.0
+        self.character = into or SPRITES[self.swap_to]
+        if self.swap_to == self.character.name:
+            self.swap_to = None
+        # He arrives with the laptop still shut, where the dissolve left it,
+        # and opens it through the fold -- one frame at a time, the way he
+        # closed it. Landing on turn[0] instead would snap it open.
+        turn = self.character.turn
+        self.view = turn[max(0, len(turn) - 2)] if turn else "side"
+        self.turn_for = TURN_SECS
         # A deer's graze is not a man's coffee: the clocks start again on
         # the character he has become, and nothing is mid-path.
         self.idle, self.idle_step, self.idle_hold, self.idle_for = None, -1, 0.0, 0.0
@@ -2317,6 +2410,13 @@ class Pet:
         sleepy = ((self.snoozing(now) or not self.present(now))
                   and self.mode == "home" and not self.text
                   and self.pause <= 0 and not self.rouse and self.idle is None)
+        # A swap that has been asked for and has nothing in its way. It
+        # outranks the snooze -- he stands up to change -- and it outranks
+        # the bubble, so the laptop shuts and he turns away from you for
+        # the half second it takes, which is what asking to swap means.
+        swapping = (self.swap_to is not None and not self.moving()
+                    and self.mode != "drag")
+        sleepy = sleepy and not swapping
 
         # The turn. A character with views faces the viewer to speak and
         # turns back when the bubble clears, one step along its turn path
@@ -2336,8 +2436,9 @@ class Pet:
         path = self.character.turn
         want_view = "side"
         if path:
-            want_view = path[-1] if self.text else path[-2] if (
-                sleepy or self.pose in ("rest", "settle")) else path[0]
+            want_view = path[-2] if (swapping or sleepy
+                                     or self.pose in ("rest", "settle", "morph")) \
+                else path[-1] if self.text else path[0]
         # The clock runs on the frame he arrives at too, not only on the
         # ones he is passing through: the state he stops in is a held
         # frame like the others, and the settle below waits for it. Zeroed
@@ -2366,7 +2467,16 @@ class Pet:
         # up by it.
         want = "rest" if (sleepy and (not path or (self.view == want_view
                                                    and self.turn_for <= 0))) else "stand"
-        if self.pose == "settle":
+        if self.pose == "morph":
+            # The dissolve. Both of him are drawn from here; when it runs
+            # out he is the other one, standing, with the laptop shut and
+            # the fold still to open.
+            self.morph_for -= dt
+            if self.morph_for <= 0:
+                self.pose = "stand"
+                self.swap(width, height, into=self.morph)
+                self.morph, self.morph_for = None, 0.0
+        elif self.pose == "settle":
             self.settle_to = want
             self.settle_for -= dt
             if self.settle_for <= 0:
@@ -2381,17 +2491,23 @@ class Pet:
                     self.turn_for = TURN_SECS
                 if self.swap_to:
                     self.swap(width, height)
-        elif self.swap_to and not self.moving() and self.mode != "drag":
-            # The swap: one held settle frame of the character he is,
-            # then the character he becomes, standing or sitting as the
-            # moment wants. Mid-walk it waits for him to arrive.
-            self.pose, self.settle_to, self.settle_for = "settle", want, self.character.settle_secs
-            self.drop_idle()
         elif want == "rest" and self.pose != "rest":
             self.pose, self.settle_to, self.settle_for = "settle", "rest", self.character.settle_secs
             self.drop_idle()
         elif want == "stand" and self.pose == "rest":
             self.pose, self.settle_to, self.settle_for = "settle", "stand", self.character.settle_secs
+        # And the dissolve starts once he is standing, done with whatever
+        # he was doing, and -- if he has a laptop -- has shut it. Mid-walk,
+        # mid-drag or mid-graze it simply waits; nothing about the swap is
+        # lost by waiting, since the ask is held in swap_to.
+        # swap_to is read again rather than trusting `swapping`: the block
+        # above may have just finished a dissolve and cleared it, and on
+        # that frame he is standing and would otherwise start another.
+        if (swapping and self.swap_to is not None and self.pose == "stand"
+                and (not path or (self.view == want_view and self.turn_for <= 0))):
+            self.morph, self.morph_for, self.pose = SPRITES[self.swap_to], MORPH_SECS, "morph"
+            debug("swap: %s -> %s, dissolving for %.2fs",
+                  self.character.name, self.morph.name, MORPH_SECS)
         if self.pose == "stand":
             self.rouse = False
         resting = self.pose == "rest"
@@ -2471,9 +2587,10 @@ class Pet:
         # gets put down. A one-frame path, which is all the deer's graze
         # is, goes in and comes out in the frame it is asked to, exactly
         # as the graze always did.
-        if self.pose not in ("rest", "settle"):
+        if self.pose not in ("rest", "settle", "morph"):
             free = (self.mode == "home" and not self.text and self.pause <= 0
-                    and not self.still and not self.snoozing(now) and self.present(now))
+                    and not self.still and not self.snoozing(now)
+                    and self.present(now) and not swapping)
             if self.idle is None and free:
                 for i, act in enumerate(self.character.idles):
                     self.next_idle[i] -= dt
@@ -2623,6 +2740,8 @@ class Pet:
             elif self.idle is not None:
                 why = " (%s %s)" % ("into" if self.idle_for > 0 else "out of",
                                     self.idle.pose)
+            elif self.pose == "morph":
+                why = " -> %s over %.2fs" % (self.morph.name, MORPH_SECS)
             elif self.pose == "rest":
                 why = " (snoozed)" if self.snoozing(now) else " (away)"
             elif self.pose == "settle":
@@ -2672,7 +2791,14 @@ class Pet:
                 self.chew if "chew" in tics else 0, self.doze,
                 self.head, self.text,
                 self.view if self.character.views else "-",
-                self.tic if "tic" in tics else 0, self.character.name)
+                self.tic if "tic" in tics else 0,
+                # The dissolve moves every frame, so the key does too and
+                # none of it is skipped. The name stays last and carries
+                # the morph with it: it changes exactly when the pair of
+                # footprints does, which is when the input region must.
+                int(self.morph_progress() * 255),
+                self.character.name if self.morph is None
+                else "%s>%s" % (self.character.name, self.morph.name))
 
     def min_trip(self):
         return MIN_TRIP_STRIDES * 4 * self.character.walk_step * self.px
@@ -3057,15 +3183,25 @@ def resolve_monitor(name, monitors):
     return None
 
 
-def draw_sprite(cr, pet, oy):
-    px, ch = pet.px, pet.character
-    flip = pet.dir < 0 and ch.mirrors        # a character that doesn't mirror ignores the facing
-    extra = dict(view=pet.view) if ch.views else {}
+def sprite_pixels(pet, ch):
+    """One character's pixels for this frame -- the one he is, or the one
+    he is turning into. A character is only ever handed a view of its own:
+    mid-swap the Pet is still holding the other one's, and the deer's is
+    "side", which is not a state a laptop has."""
+    extra = {}
+    if ch.views:
+        extra["view"] = (pet.view if pet.view in ch.views
+                         else ch.turn[max(0, len(ch.turn) - 2)])
     if "tic" in ch.tics:
         extra["tic"] = pet.tic
-    pts = ch.pixels(pet.frame(), pet.blink > 0, pet.pose,
-                    1 if pet.ear > 0 else 0, pet.tail_frame(),
-                    pet.gait(), pet.chew, pet.doze, **extra)
+    return ch.pixels(pet.frame(), pet.blink > 0, pet.pose,
+                     1 if pet.ear > 0 else 0, pet.tail_frame(),
+                     pet.gait(), pet.chew, pet.doze, **extra)
+
+
+def paint_sprite(cr, pet, ch, oy, pts):
+    px = pet.px_of(ch)
+    flip = pet.dir < 0 and ch.mirrors        # a character that doesn't mirror ignores the facing
 
     def sx(x):
         return pet.x + ((ch.w - 1 - x) if flip else x) * px
@@ -3078,6 +3214,25 @@ def draw_sprite(cr, pet, oy):
         cr.set_source_rgb(*col)
         cr.rectangle(sx(x), oy + y * px, px, px)
         cr.fill()
+
+
+def draw_sprite(cr, pet, oy):
+    """One character, or -- for the half second of a swap -- both of them,
+    each dissolving on its own grid (see the swap). The halo rings go down
+    for both before either one's pixels do, so a ring can never land on top
+    of a pixel of the other."""
+    ch = pet.character
+    if pet.morph is None:
+        paint_sprite(cr, pet, ch, oy, sprite_pixels(pet, ch))
+        return
+    p = pet.morph_progress()
+    into = pet.morph
+    # Both stand on the same ground line, which is the only thing the two
+    # canvases agree on and so the only sane anchor.
+    into_oy = oy + pet.h - into.h * pet.px_of(into)
+    for c, o, pts in ((ch, oy, morph_keep(sprite_pixels(pet, ch), p, True)),
+                      (into, into_oy, morph_keep(sprite_pixels(pet, into), p, False))):
+        paint_sprite(cr, pet, c, o, pts)
 
 
 def draw_bubble(cr, pet, oy, width):
@@ -3444,9 +3599,8 @@ def build_app(opts, tips):
                     # The input region follows him, and nothing else. Hidden
                     # is handled in set_visible: an empty region hands every
                     # click to whatever is underneath, not to an invisible deer.
-                    surface.set_input_region(cairo.Region(cairo.RectangleInt(
-                        int(self.pet.x), int(self.pet.y),
-                        int(self.pet.w), int(self.pet.h))))
+                    surface.set_input_region(cairo.Region(
+                        cairo.RectangleInt(*self.pet.bounds())))
             self._key = key
             self.area.queue_draw()
             return True

@@ -16,7 +16,9 @@ the file shows is what the code does.
     python3 tools/render-demo.py --sprite dane --acts head-down --fps 25
 
 `--acts` renders a named part of the script on its own, which is how a
-transition gets judged as motion rather than as a sheet of stills. `--mp4`
+transition gets judged as motion rather than as a sheet of stills.
+`--acts swap` is the transformation into the other character, and which way
+round it goes is whichever `--sprite` it starts as. `--mp4`
 is written beside the GIF unless `--no-mp4`. Needs ffmpeg.
 """
 import importlib.util, os, shutil, subprocess, sys, tempfile
@@ -152,6 +154,15 @@ def acts(c, draw):
                                  "here, which is the point of it.", 6.0, c.t)
         c.run(8.4, draw)                       # lid down, look up, the bubble, and back
 
+    def swap():
+        # The transformation, driven by the signal the key sends. Both
+        # characters are drawn through the dissolve, so this is the only
+        # act whose canvas is not one character's.
+        c.run(0.7, draw)
+        pet.request_swap()
+        c.run(2.1, draw)                       # laptop, dissolve, laptop again
+        c.run(0.9, draw)
+
     def head_down():
         pet.snooze_until = c.t + 5.0
         c.run(5.0, draw)                       # lid closes, head goes down, he stays
@@ -159,7 +170,7 @@ def acts(c, draw):
         c.run(2.4, draw)                       # and back up to work
 
     return [("working", working), ("coffee", coffee), ("beard", beard),
-            ("speaking", speaking), ("head-down", head_down)]
+            ("speaking", speaking), ("head-down", head_down), ("swap", swap)]
 
 
 # What the shipped demo is: a minute of his day, in the order it reads

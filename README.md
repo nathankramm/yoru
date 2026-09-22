@@ -260,9 +260,14 @@ the installed release, not the branch.
 The last two are Hyprland bindings `install.sh` puts in your `bindings.lua`.
 They send `SIGUSR1` and `SIGUSR2` and the process keeps running, so his
 position, snooze state and which tips he's seen all survive either one. The
-swap goes through the same held settle frame as lying down, so it's a
-change, not a cut, and the choice is written to `state.json` — he comes back
-as whoever he was. `yoru --swap` sends the same signal from a terminal.
+swap is a transformation rather than a cut: the deer is The Dane's spirit
+animal, and one dissolves into the other over about half a second, pixel by
+scattered pixel, each on its own grid — so the deer leaves in four-pixel
+blocks and The Dane arrives in two-pixel ones and you watch one density
+become the other. He shuts the laptop first and opens it after, so he
+changes as himself and not mid-typing. The choice is written to
+`state.json` — he comes back as whoever he was. `yoru --swap` sends the
+same signal from a terminal.
 
 From the terminal, no GUI involved:
 
@@ -418,7 +423,7 @@ what he is doing to address you. When the bubble clears he opens it
 again, a frame at a time, and his eyes go back down. Snoozed, or once
 you've been away, the same fold happens and *then* his head goes down on
 folded arms, through a held frame of its own — the laptop is always shut
-before he sleeps on it. The props take the theme through the same tones
+before he sleeps on it, and before he turns into a deer. The props take the theme through the same tones
 as his clothes.
 
 <p align="center">

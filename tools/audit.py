@@ -1050,11 +1050,11 @@ m.SPRITES["tall"] = tall
 try:
     p = sw.pet; bottom = p.y + p.h; hb = p.home_y + p.h
     p.request_swap("tall"); p.pose = "stand"
-    for _ in range(12): sw.tick(); time.sleep(0.02)
+    for _ in range(24): sw.tick(); time.sleep(0.02)   # his settle is longer than the deer's
     grew = (p.character.name == "tall" and p.px == 3 and p.h == 64 * 3 and p.y + p.h == bottom
             and p.home_y + p.h == hb)
     p.request_swap("dane")
-    for _ in range(12): sw.tick(); time.sleep(0.02)
+    for _ in range(24): sw.tick(); time.sleep(0.02)
     back = p.character.name == "dane" and p.px == 2 and p.y + p.h == bottom
 finally:
     del m.SPRITES["tall"]
@@ -1254,6 +1254,39 @@ ck("68 how often: the beard stroke is the rarer of the two, both are minutes apa
    "%dh: %d coffees, %d beard strokes, idle %.1f%% of the time; held off while %s; interrupted sip goes %s"
    % (HOURS, bouts["sip"], bouts["beard"], share * 100,
       ", ".join("%s (%d)" % (k, v) for k, v in quiet.items()), "-".join(back)))
+# Head down, as motion. The laptop is shut before the head moves and the
+# head is up before it opens -- it used to go from a lid seven rows tall
+# to a slab in the one frame the head dropped -- and his settle frame is
+# his own, longer than the deer's, because he has further to go.
+random.seed(29)
+p = m.Pet(types.SimpleNamespace(**dict(vars(O), scale=None, sprite="dane")), m.KNOWLEDGE)
+p.seen = set(); p.place(1920, 1080); p.present_until = 1e9; p.next_talk = 1e9; quiet_idles(p)
+p.step(DTI, 0.0, 1920, 1080)
+down = [[(p.pose, p.view), 0.0, p.render_key()]]; t = 0.0
+for i in range(int(6.0 / DTI)):
+    t += DTI
+    if i == 2: p.snooze_until = t + 2.5
+    if abs(t - 3.2) < DTI / 2: p.snooze_until = 0.0
+    p.step(DTI, t, 1920, 1080)
+    if (p.pose, p.view) != down[-1][0]:
+        down.append([(p.pose, p.view), 0.0, p.render_key()])
+    down[-1][1] += DTI * 1000
+steps = [(pose, view, ms) for (pose, view), ms, _ in down]
+lids = [m.LAPTOP_LID["speak" if pose in ("rest", "settle") else view][0] for pose, view, _ in steps]
+fold_first = all(pose == "stand" for pose, _, _ in steps[:steps.index(
+    next(s for s in steps if s[0] == "settle"))])
+shut = m.LAPTOP_LID[chars["dane"].turn[-2]][0]
+settles = [ms for pose, _, ms in steps if pose == "settle"]
+keys = [d[2] for d in down]
+ck("69 his head goes down behind a laptop that is already shut: the lid folds first, a frame at a time, then the settle, then his head is on his arms -- and the same in reverse coming up, his own settle frame held longer than the deer's",
+   fold_first and [pose for pose, _, _ in steps] == ["stand"] * 3 + ["settle", "rest", "settle"] + ["stand"] * 3
+   and all(abs(ms - m.DANE_SETTLE_SECS * 1000) <= 40 for ms in settles)
+   and m.DANE_SETTLE_SECS > m.SETTLE_SECS
+   and all(a != b for a, b in zip(keys, keys[1:]))
+   and all(a <= b for a, b in zip(lids, lids[1:len(lids) // 2 + 1])),
+   "%s; settle held %s (his own is %.0fms, the deer's %.0fms); lid top row %s"
+   % (" -> ".join("%s/%s %.0fms" % s for s in steps), ", ".join("%.0fms" % x for x in settles),
+      m.DANE_SETTLE_SECS * 1000, m.SETTLE_SECS * 1000, lids))
 # The accent, everywhere, not just on his face. Check 60 watched the face
 # because that is where a glow was once drawn and read as a rash; this
 # watches the whole canvas, because the thing that actually got through

@@ -411,8 +411,9 @@ to three to one, so it reads as a lid coming down and not as a cut. Then
 he looks up at you, and speaks. Closing the laptop is the point: he stops
 what he is doing to address you. When the bubble clears he opens it
 again, a frame at a time, and his eyes go back down. Snoozed, or once
-you've been away, his head goes down on folded arms on the desk, through
-one held frame each way. The props take the theme through the same tones
+you've been away, the same fold happens and *then* his head goes down on
+folded arms, through a held frame of its own — the laptop is always shut
+before he sleeps on it. The props take the theme through the same tones
 as his clothes.
 
 <p align="center">

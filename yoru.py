@@ -1160,17 +1160,22 @@ class Character:
     own idle motion, driven by the Pet at `tic_every`); its views and the
     path the Pet walks between them to speak, one TURN_SECS a step; and
     its idle actions -- the deer's graze, The Dane's coffee and beard
-    stroke -- as Idles, each with a cadence and a path of its own."""
+    stroke -- as Idles, each with a cadence and a path of its own; and
+    how long its one settle frame is held, which is how far a character
+    has to travel between standing and down: the deer drops five rows
+    and pulls his head back, The Dane leaves the front view entirely and
+    ends up as the top of a head on a pair of arms."""
 
     def __init__(self, name, label, pixels, size, scale, gaits, walk_step, pace,
                  roams=True, mirrors=True, tics=(), tic_every=(0.25, 0.5), views=(),
-                 turn=(), idles=()):
+                 turn=(), idles=(), settle_secs=SETTLE_SECS):
         self.name, self.label, self.pixels = name, label, pixels
         self.w, self.h, self.scale = size[0], size[1], scale
         self.roams, self.mirrors = roams, mirrors
         self.gaits, self.walk_step, self.pace = gaits, walk_step, pace
         self.tics, self.tic_every, self.views, self.turn = tics, tic_every, views, turn
         self.idles = idles
+        self.settle_secs = settle_secs
 
 
 SPRITES = {
@@ -1188,7 +1193,8 @@ SPRITES = {
                       idles=(Idle("sip", every=(150, 400), secs=(1.8, 2.8),
                                   path=COFFEE_PATH),
                              Idle("beard", every=(700, 1600), secs=(1.0, 1.6),
-                                  path=BEARD_PATH))),
+                                  path=BEARD_PATH)),
+                      settle_secs=DANE_SETTLE_SECS),
 }
 DEFAULT_SPRITE = "yoru"
 
@@ -2300,6 +2306,50 @@ class Pet:
         if DEBUG:
             self._trace(now)
 
+        if self.text and now > self.text_until:
+            self.head = self.text = None
+
+        # Does he want to be lying down? Snoozed or nobody here, parked,
+        # nothing to say, nothing rousing him, and not in the middle of an
+        # idle action -- mid-coffee he finishes putting the mug down
+        # first, because a head that drops while the hand is still at the
+        # chin is two motions at once.
+        sleepy = ((self.snoozing(now) or not self.present(now))
+                  and self.mode == "home" and not self.text
+                  and self.pause <= 0 and not self.rouse and self.idle is None)
+
+        # The turn. A character with views faces the viewer to speak and
+        # turns back when the bubble clears, one step along its turn path
+        # per TURN_SECS -- The Dane folds the laptop down over two frames,
+        # then front, and the same path back. A character without views is
+        # drawn from the side whatever this says. A want that flips
+        # mid-turn simply reverses along the path from wherever he is.
+        #
+        # Going to sleep walks the same path, but stops one short of the
+        # end: the last state is the one where he looks up at you, and he
+        # is not looking at anybody, he is putting his head down. One
+        # short is the lid shut and the eyes still down, which is exactly
+        # what the head-down frames want behind them. Before this the lid
+        # went from fully open to a slab in the single frame the head
+        # dropped -- three things moving at once, in 150ms, and the laptop
+        # simply vanished.
+        path = self.character.turn
+        want_view = "side"
+        if path:
+            want_view = path[-1] if self.text else path[-2] if (
+                sleepy or self.pose in ("rest", "settle")) else path[0]
+        # The clock runs on the frame he arrives at too, not only on the
+        # ones he is passing through: the state he stops in is a held
+        # frame like the others, and the settle below waits for it. Zeroed
+        # on arrival instead, the lid reached "closing" and the head went
+        # down in the same frame, so the drawing went from a lid five rows
+        # tall to a shut one with nothing in between.
+        self.turn_for -= dt
+        if path and self.view != want_view and self.turn_for <= 0:
+            i, j = path.index(self.view), path.index(want_view)
+            self.view = path[i + (1 if j > i else -1)]
+            self.turn_for = TURN_SECS
+
         # Lying down is what snooze and an empty chair look like. Middle
         # click used to change nothing on screen, so the only way to see it
         # had worked was to click again, which undid it. He lies down when
@@ -2311,28 +2361,37 @@ class Pet:
         # Both ways go through one held frame, the settle, or the change is
         # a teleport. Its destination can flip mid-hold (a second middle
         # click 100ms after the first) and it simply lands on the new one.
-        want = "rest" if ((self.snoozing(now) or not self.present(now))
-                          and self.mode == "home" and not self.text
-                          and self.pause <= 0 and not self.rouse
-                          and self.idle is None) else "stand"
+        # He waits for the laptop to be shut before he goes down, which is
+        # what the `view` test is: a character with no views is never held
+        # up by it.
+        want = "rest" if (sleepy and (not path or (self.view == want_view
+                                                   and self.turn_for <= 0))) else "stand"
         if self.pose == "settle":
             self.settle_to = want
             self.settle_for -= dt
             if self.settle_for <= 0:
                 self.pose = want
+                if want == "stand":
+                    # Coming up, the view he lands in gets a full turn of
+                    # its own before the lid starts opening: he sits up,
+                    # and then he opens the laptop. Only coming up -- give
+                    # it to him going down too and the clock the settle is
+                    # waiting on restarts the moment he reaches the floor,
+                    # and he sits up and lies down for ever.
+                    self.turn_for = TURN_SECS
                 if self.swap_to:
                     self.swap(width, height)
         elif self.swap_to and not self.moving() and self.mode != "drag":
             # The swap: one held settle frame of the character he is,
             # then the character he becomes, standing or sitting as the
             # moment wants. Mid-walk it waits for him to arrive.
-            self.pose, self.settle_to, self.settle_for = "settle", want, SETTLE_SECS
+            self.pose, self.settle_to, self.settle_for = "settle", want, self.character.settle_secs
             self.drop_idle()
         elif want == "rest" and self.pose != "rest":
-            self.pose, self.settle_to, self.settle_for = "settle", "rest", SETTLE_SECS
+            self.pose, self.settle_to, self.settle_for = "settle", "rest", self.character.settle_secs
             self.drop_idle()
         elif want == "stand" and self.pose == "rest":
-            self.pose, self.settle_to, self.settle_for = "settle", "stand", SETTLE_SECS
+            self.pose, self.settle_to, self.settle_for = "settle", "stand", self.character.settle_secs
         if self.pose == "stand":
             self.rouse = False
         resting = self.pose == "rest"
@@ -2437,25 +2496,6 @@ class Pet:
                 self.pose = self.idle.path[self.idle_step] if self.idle_step >= 0 else "stand"
                 if self.idle_step < 0:
                     self.idle = None
-
-        if self.text and now > self.text_until:
-            self.head = self.text = None
-
-        # The turn. A character with views faces the viewer to speak and
-        # turns back when the bubble clears, one step along its turn path
-        # per TURN_SECS -- The Dane folds the laptop down over two frames,
-        # then front, and the same path back. A character without views is
-        # drawn from the side whatever this says. A want that flips
-        # mid-turn simply reverses along the path from wherever he is.
-        #
-        path = self.character.turn
-        want_view = (path[-1] if self.text else path[0]) if path else "side"
-        if path and self.view != want_view:
-            self.turn_for -= dt
-            if self.turn_for <= 0:
-                i, j = path.index(self.view), path.index(want_view)
-                self.view = path[i + (1 if j > i else -1)]
-                self.turn_for = TURN_SECS if self.view != want_view else 0.0
 
         # A character's own idle motion, while he is parked and at it --
         # neither shipped character declares one; the deer has his ear,

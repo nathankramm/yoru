@@ -128,6 +128,25 @@ pixel is, so at 16 it all but disappears and at 2 it is half the width of
 everything it surrounds. That difference has been wrong about what reads
 more than once.
 
+## render-demo.py
+
+Renders a scripted stretch of a character's life to a GIF and an MP4,
+through the real `Pet.step`, `draw_sprite` and `draw_bubble`. The deer's
+demo was a screen capture, which means waiting for him to do the thing and
+re-recording when he didn't; this drives the shipped code instead, so the
+file shows what the code does and the same command makes the same file
+twice.
+
+    python3 tools/render-demo.py --sprite dane --theme tokyo-night docs/dane-motion.gif
+    python3 tools/render-demo.py --sprite dane --acts coffee --out /tmp/c.gif
+    python3 tools/render-demo.py --sprite dane --acts head-down --no-mp4 --out /tmp/d.gif
+
+The script says only when to nudge him — coffee now, speak now, away now —
+and everything between those nudges is the Pet's own timing. `--acts` runs
+one named act on its own, which is how a transition gets judged as motion
+instead of as a sheet of stills: `working`, `coffee`, `beard`, `speaking`,
+`head-down`. Needs `ffmpeg`.
+
 ## At the next release
 
     omarchy version                          # note it

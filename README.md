@@ -382,6 +382,11 @@ the collar, a beard. He is played exactly the way the deer is: the humour
 is in the dry lines and never in the movement, and he does ordinary things
 with total seriousness. Nothing goofy.
 
+<p align="center">
+  <img src="docs/dane-motion.gif" alt="The Dane working, taking his coffee, closing the laptop to speak, and putting his head down" width="460"><br>
+  <sub>Twenty-five seconds of his day, drawn by the code that draws him. Smaller and sharper as <a href="docs/dane-motion.mp4">MP4</a>.</sub>
+</p>
+
 He lives at a desk, facing you. A tabletop on two slim legs, him seated
 behind it with his legs showing beneath, a laptop open on the desk facing
 him — so what you see is the back of the lid — and a mug beside it. He

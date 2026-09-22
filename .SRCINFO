@@ -1,6 +1,6 @@
 pkgbase = yoru
 	pkgdesc = A pixel deer in the corner of your screen that teaches you Omarchy
-	pkgver = 1.0.1
+	pkgver = 1.1.0
 	pkgrel = 1
 	url = https://github.com/nathankramm/yoru
 	install = yoru.install
@@ -14,7 +14,7 @@ pkgbase = yoru
 	depends = pango
 	depends = glib2
 	optdepends = hyprland: focused-window context, live binding checks and the hide/show key
-	source = yoru-1.0.1.tar.gz::https://github.com/nathankramm/yoru/archive/refs/tags/v1.0.1.tar.gz
-	sha256sums = dd2283e541a49fece8ff74006ba530ea1c44bf071403ac2893c23773056be53d
+	source = yoru-1.1.0.tar.gz::https://github.com/nathankramm/yoru/archive/refs/tags/v1.1.0.tar.gz
+	sha256sums = 31d25338666c41e28e19fddbd334128ba5d30fae2269173945cb718c57e28a53
 
 pkgname = yoru

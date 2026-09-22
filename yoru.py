@@ -616,11 +616,14 @@ def pixels(frame, blink, pose="stand", ear=0, tail=0, gait=None, chew=0, doze=0)
 
 
 # ------------------------------------------------------------ characters ----
-# A second character, drawn. Nothing reads it yet: the Pet learns to wear
-# a character next, and the tools learn to draw him there too. What a
-# character is, is a `pixels` function with the deer's signature -- the
-# deer's is pixels() above, code all the way down; The Dane's is a map, a
-# palette of roles and a pose table below.
+# Two characters, one Pet. Everything that is not the drawing -- tips,
+# context, cadence, theme following, the turn-away, idle detection, the
+# roam -- is the Pet, and it never asks which character it is wearing
+# beyond three facts it reads from the character: the canvas size, the
+# gaits it can draw, and how far one frame of its walk travels. The
+# drawing is a `pixels` function with the deer's signature. The deer's is
+# pixels() above, code all the way down; The Dane's is a map, a palette of
+# roles and a pose table, and a third character is the same three things.
 #
 # The Dane is named in honour of Omarchy's creator. Same tone as the deer:
 # ordinary things done with total seriousness. Nothing goofy.
@@ -1011,6 +1014,87 @@ def dane_pixels(frame, blink, pose="stand", ear=0, tail=0, gait=None, chew=0, do
     _dane_desk(out, pal, lid)
     return out
 
+
+class Character:
+    """What the Pet reads from a character: its name for state.json, the
+    label the bubble shows, its drawing, its canvas in sprite pixels and
+    the screen pixels each of those takes (--scale overrides it for every
+    character); whether it roams at all and whether it mirrors to face
+    the way the Pet faces, the gaits it can draw, how far
+    one frame of its walk travels in sprite pixels and its walking pace
+    as a range in body heights a second (the deer's 46-72 px/s at 96px
+    tall is 0.48-0.75); the deer's tics it uses ("tic" is a character's
+    own idle motion, driven by the Pet at `tic_every`); its views and the
+    path the Pet walks between them to speak, one TURN_SECS a step; and
+    the cadence of its idle pose -- the deer's graze, The Dane's coffee --
+    as seconds between and seconds of."""
+
+    def __init__(self, name, label, pixels, size, scale, gaits, walk_step, pace,
+                 roams=True, mirrors=True, tics=(), tic_every=(0.25, 0.5), views=(),
+                 turn=(), idle_every=(25, 70), idle_for=(4, 11)):
+        self.name, self.label, self.pixels = name, label, pixels
+        self.w, self.h, self.scale = size[0], size[1], scale
+        self.roams, self.mirrors = roams, mirrors
+        self.gaits, self.walk_step, self.pace = gaits, walk_step, pace
+        self.tics, self.tic_every, self.views, self.turn = tics, tic_every, views, turn
+        self.idle_every, self.idle_for = idle_every, idle_for
+
+
+SPRITES = {
+    "yoru": Character("yoru", "Yoru", pixels, (SW, SH), 4, ("walk", "bound"),
+                      WALK_STEP, (46 / 96, 72 / 96), tics=("ear", "tail", "chew")),
+    # He does not roam and does not mirror: a man at a desk has nowhere
+    # to walk to, and the desk faces you (see the scene). No tic: working,
+    # his only motion is the blink. Coffee, his idle pose, comes every few
+    # minutes and lasts a few seconds.
+    "dane": Character("dane", "The Dane", dane_pixels, (56, 48), 2, (),
+                      WALK_STEP, (46 / 96, 72 / 96), roams=False, mirrors=False,
+                      views=DANE_VIEWS, turn=DANE_TURN,
+                      idle_every=(150, 400), idle_for=(3, 5)),
+}
+DEFAULT_SPRITE = "yoru"
+
+# The swap: SIGUSR2, the way hiding is SIGUSR1. The signal only asks; the
+# Pet does the change on its next step, through the settle frame, so it
+# can never land in the middle of a frame or skip the one frame the user
+# is watching for.
+_on_swap = []
+
+
+def request_swap(*_):
+    debug("swap: requested (SIGUSR2)")
+    for fn in _on_swap:
+        fn()
+    return True                 # keep the signal watch installed
+
+
+def sprite_choice(flag=None):
+    """Which character to start as: the flag if given (and it is saved),
+    else the saved choice, else the deer."""
+    st = read_state()
+    if flag:
+        if st.get("sprite") != flag:
+            st["sprite"] = flag
+            save_json(STATE, st)
+        return flag
+    saved = st.get("sprite")
+    return saved if saved in SPRITES else DEFAULT_SPRITE
+
+
+def cmd_swap():
+    """`yoru --swap`: SIGUSR2 to the running instance, found by the exact
+    path this binary was run as -- the same pattern the Hyprland bind
+    uses -- and never to this process, whose own command line matches."""
+    me = os.path.abspath(sys.argv[0])
+    pattern = "python3 %s( |$)" % re.escape(me)
+    r = subprocess.run(["pgrep", "-f", pattern], capture_output=True, text=True)
+    pids = [int(p) for p in r.stdout.split() if int(p) != os.getpid()]
+    if not pids:
+        print("yoru: not running (looked for %s)" % me, file=sys.stderr)
+        return 1
+    for pid in pids:
+        os.kill(pid, signal.SIGUSR2)
+    return 0
 
 
 # ------------------------------------------------------------- knowledge ----
@@ -1685,12 +1769,28 @@ DECAY_CAP = 4
 
 class Pet:
     def __init__(self, opts, tips):
-        self.px = opts.scale
+        self._scale = getattr(opts, "scale", None)      # --scale, or None
         self.interval = opts.interval
         self.quiet = getattr(opts, "quiet", False)
         self.roam = opts.roam
         self.margin = opts.margin
         self.corner = opts.corner
+
+        # Which character he is. The Pet is the same either way; the
+        # drawing, the canvas and the gaits are read from this. A swap
+        # asked for by SIGUSR2 waits here until step() takes it through
+        # the settle frame.
+        self.character = SPRITES[getattr(opts, "sprite", None) or DEFAULT_SPRITE]
+        self.swap_to = None
+        # Which way he faces, for a character with views: side by default,
+        # front while he speaks, the steps of the character's turn path
+        # held TURN_SECS each between. And the character's own idle
+        # motion -- The Dane's typing hand -- a bit the Pet flips on its
+        # own jittered clock while he is parked and idle.
+        self.view = self.character.turn[0] if self.character.turn else "side"
+        self.turn_for = 0.0
+        self.tic = 0
+        self.next_tic = 0.0
 
         self.tips = tips
         self.seen = load_seen()
@@ -1729,7 +1829,7 @@ class Pet:
         self.next_blink = random.uniform(2, 6)
         # Idle tics. A deer standing still is never quite still.
         self.pose = "stand"
-        self.next_graze = random.uniform(25, 70)
+        self.next_graze = random.uniform(*self.character.idle_every)
         self.graze_for = 0.0
         # The frame between standing and lying: where it is going, how
         # long it has left, and whether something (a walk) needs him up
@@ -1775,12 +1875,50 @@ class Pet:
 
     # -- placement ---------------------------------------------------------
     @property
+    def px(self):
+        return self._scale or self.character.scale
+
+    @property
     def w(self):
-        return SW * self.px
+        return self.character.w * self.px
 
     @property
     def h(self):
-        return SH * self.px
+        return self.character.h * self.px
+
+    # -- the swap ---------------------------------------------------------
+    def request_swap(self, name=None):
+        """Ask for the next character (or `name`). Taken in step(), through
+        the settle frame; asked twice before that, the second ask wins."""
+        order = list(SPRITES)
+        if name is None:
+            name = order[(order.index(self.character.name) + 1) % len(order)]
+        if name not in SPRITES:
+            debug("swap: no character called %r", name)
+            return
+        self.swap_to = name
+        debug("swap: %s -> %s, waiting for the settle", self.character.name, name)
+
+    def swap(self, width, height):
+        """Become swap_to, keeping the spot, the facing and everything
+        else. Two characters may differ in height; the feet stay on the
+        ground line, so the top moves, not the bottom."""
+        was, was_h = self.character, self.h
+        self.character = SPRITES[self.swap_to]
+        self.swap_to = None
+        self.view = self.character.turn[0] if self.character.turn else "side"
+        self.turn_for = 0.0
+        dh = was_h - self.h                 # canvas and scale may both differ
+        self.y += dh
+        if self.home_y is not None:
+            self.home_y += dh
+            self.clamp_home(width, height)
+        self.y = max(4, min(self.y, height - self.h))
+        st = read_state()
+        st["sprite"] = self.character.name
+        save_json(STATE, st)
+        debug("swap: now %s at (%d,%d) facing %s, saved", self.character.name,
+              self.x, self.y, "right" if self.dir > 0 else "left")
 
     def place(self, width, height):
         saved = load_home()
@@ -2008,6 +2146,14 @@ class Pet:
             self.settle_for -= dt
             if self.settle_for <= 0:
                 self.pose = want
+                if self.swap_to:
+                    self.swap(width, height)
+        elif self.swap_to and not self.moving() and self.mode != "drag":
+            # The swap: one held settle frame of the character he is,
+            # then the character he becomes, standing or sitting as the
+            # moment wants. Mid-walk it waits for him to arrive.
+            self.pose, self.settle_to, self.settle_for = "settle", want, SETTLE_SECS
+            self.graze_for = 0.0
         elif want == "rest" and self.pose != "rest":
             self.pose, self.settle_to, self.settle_for = "settle", "rest", SETTLE_SECS
             self.graze_for = 0.0
@@ -2091,11 +2237,38 @@ class Pet:
             self.next_graze -= dt
             if self.next_graze <= 0:
                 self.pose = "graze"
-                self.graze_for = random.uniform(4, 11)
-                self.next_graze = random.uniform(30, 90)
+                self.graze_for = random.uniform(*self.character.idle_for)
+                self.next_graze = random.uniform(*self.character.idle_every)
 
         if self.text and now > self.text_until:
             self.head = self.text = None
+
+        # The turn. A character with views faces the viewer to speak and
+        # turns back when the bubble clears, one step along its turn path
+        # per TURN_SECS -- The Dane closes the laptop, then the quarter
+        # frame, then front, and the same path back. A character without views is
+        # drawn from the side whatever this says. A want that flips
+        # mid-turn simply reverses along the path from wherever he is.
+        #
+        path = self.character.turn
+        want_view = (path[-1] if self.text else path[0]) if path else "side"
+        if path and self.view != want_view:
+            self.turn_for -= dt
+            if self.turn_for <= 0:
+                i, j = path.index(self.view), path.index(want_view)
+                self.view = path[i + (1 if j > i else -1)]
+                self.turn_for = TURN_SECS if self.view != want_view else 0.0
+
+        # A character's own idle motion, while he is parked and at it --
+        # neither shipped character declares one; the deer has his ear,
+        # tail and cud, The Dane only his blink. Flipped on a jittered
+        # clock so it never reads as a metronome; still while he speaks
+        # or rests.
+        if "tic" in self.character.tics and self.pose == "stand" and (not path or self.view == path[0]):
+            self.next_tic -= dt
+            if self.next_tic <= 0:
+                self.tic = 1 - self.tic
+                self.next_tic = random.uniform(*self.character.tic_every)
 
         self.next_talk -= dt
         if self.next_talk <= 0:
@@ -2129,7 +2302,7 @@ class Pet:
             return
 
         if self.mode == "home":
-            if self.still:
+            if self.still or not self.character.roams:
                 return
             if self.snoozing(now):
                 return          # told to be quiet for an hour: he stays down
@@ -2165,11 +2338,12 @@ class Pet:
                 # A walk only moves x. If y is off the surface he would walk
                 # past unseen, so bring it in before he sets off.
                 self.y = max(4, min(self.y, height - self.h))
-                # One trip in five he spooks himself and bounds it, tail up.
-                if random.random() < 0.2:
+                # One trip in five he spooks himself and bounds it, tail up
+                # -- the deer does; a character with no bound walks them all.
+                if "bound" in self.character.gaits and random.random() < 0.2:
                     self.speed = 150.0
                 else:
-                    self.speed = random.uniform(46, 72)
+                    self.speed = self.walk_speed()
                 self.mode = "out"
             return
 
@@ -2183,10 +2357,10 @@ class Pet:
             if self.mode == "out":
                 self.mode = "back"
                 self.pause = random.uniform(1.5, 5.0)
-                if random.random() < 0.2:
+                if "bound" in self.character.gaits and random.random() < 0.2:
                     self.speed = 150.0
                 else:
-                    self.speed = random.uniform(46, 72)
+                    self.speed = self.walk_speed()
             else:
                 self.mode = "home"
                 self.next_roam = random.uniform(self.roam * 0.7, self.roam * 1.6)
@@ -2250,18 +2424,31 @@ class Pet:
         """Everything a frame depends on. Two equal keys draw the same
         pixels, so a frame whose key hasn't moved needn't be drawn at all —
         and between a blink, an ear and a tail, most frames haven't."""
+        # Position first and character last: tick() reads both to know
+        # when the input region must follow him or change size.
+        tics = self.character.tics
         return (int(self.x), int(self.y), self.dir, self.frame(), self.pose,
-                self.blink > 0, self.ear > 0, self.tail_frame(), self.gait(),
-                self.chew, self.doze,
-                self.head, self.text)
+                self.blink > 0, "ear" in tics and self.ear > 0,
+                self.tail_frame() if "tail" in tics else 0, self.gait(),
+                self.chew if "chew" in tics else 0, self.doze,
+                self.head, self.text,
+                self.view if self.character.views else "-",
+                self.tic if "tic" in tics else 0, self.character.name)
 
     def min_trip(self):
-        return MIN_TRIP_STRIDES * 4 * WALK_STEP * self.px
+        return MIN_TRIP_STRIDES * 4 * self.character.walk_step * self.px
+
+    def walk_speed(self):
+        """Screen pixels a second for a walk: the character's pace, in body
+        heights a second, times his height on screen -- so he covers the
+        same share of himself a second at any scale. The deer's is the
+        46-72 px/s he always had."""
+        return random.uniform(*self.character.pace) * self.h
 
     def frame(self):
         if not self.moving():
             return 1
-        step = self.px * (BOUND_STEP if self.bounding() else WALK_STEP)
+        step = self.px * (BOUND_STEP if self.bounding() else self.character.walk_step)
         return int(self.dist / step) % 4
 
 
@@ -2467,7 +2654,9 @@ def cmd_verify_report(tips):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Yoru, a Clippy for Omarchy.")
-    p.add_argument("--scale", type=int, default=4, help="pixel size (default 4)")
+    p.add_argument("--scale", type=int, default=None,
+                   help="screen pixels per sprite pixel, for every character "
+                        "(default: each character's own -- the deer 4, The Dane 2)")
     p.add_argument("--corner", default="br", choices=["br", "bl", "tr", "tl"],
                    help="where he parks on first run (default bottom right)")
     p.add_argument("--margin", type=int, default=24,
@@ -2499,6 +2688,11 @@ def main(argv=None):
                    help="no ambient tips; only when asked or on context")
     p.add_argument("--still", action="store_true",
                    help="never walk, bound or graze; he only blinks and talks")
+    p.add_argument("--sprite", choices=sorted(SPRITES),
+                   help="which character: yoru (the deer, default) or dane; "
+                        "remembered, so it survives a restart")
+    p.add_argument("--swap", action="store_true",
+                   help="swap the running instance's character (SIGUSR2) and exit")
     p.add_argument("--version", action="version", version="yoru " + VERSION)
     p.add_argument("--start-hidden", action="store_true",
                    help="begin off screen; SIGUSR1 toggles him")
@@ -2529,6 +2723,9 @@ def main(argv=None):
         save_json(KNOWN, [])
         print("Retired tips restored.")
         return 0
+    if opts.swap:
+        return cmd_swap()
+    opts.sprite = sprite_choice(opts.sprite)
     if opts.ask:
         return cmd_ask(opts.ask)
     if opts.list:
@@ -2621,13 +2818,17 @@ def resolve_monitor(name, monitors):
 
 
 def draw_sprite(cr, pet, oy):
-    px, flip = pet.px, pet.dir < 0
-    pts = pixels(pet.frame(), pet.blink > 0, pet.pose,
-                 1 if pet.ear > 0 else 0, pet.tail_frame(),
-                 pet.gait(), pet.chew, pet.doze)
+    px, ch = pet.px, pet.character
+    flip = pet.dir < 0 and ch.mirrors        # a character that doesn't mirror ignores the facing
+    extra = dict(view=pet.view) if ch.views else {}
+    if "tic" in ch.tics:
+        extra["tic"] = pet.tic
+    pts = ch.pixels(pet.frame(), pet.blink > 0, pet.pose,
+                    1 if pet.ear > 0 else 0, pet.tail_frame(),
+                    pet.gait(), pet.chew, pet.doze, **extra)
 
     def sx(x):
-        return pet.x + ((SW - 1 - x) if flip else x) * px
+        return pet.x + ((ch.w - 1 - x) if flip else x) * px
 
     cr.set_source_rgba(*OUTLINE, 0.85)
     for x, y, _ in pts:
@@ -2642,7 +2843,7 @@ def draw_sprite(cr, pet, oy):
 def draw_bubble(cr, pet, oy, width):
     esc = GLib.markup_escape_text
     markup = ('<span foreground="%s">%s</span>\n%s'
-              % (ACCENT_HEX, esc(pet.head or "Yoru"), esc(pet.text)))
+              % (ACCENT_HEX, esc(pet.head or pet.character.label), esc(pet.text)))
 
     layout = PangoCairo.create_layout(cr)
     layout.set_font_description(Pango.FontDescription("monospace 10"))
@@ -2787,6 +2988,7 @@ def build_app(opts, tips):
             if not read_state().get("introduced"):
                 GLib.timeout_add_seconds(4, self.intro)
             _on_visibility.append(self.set_visible)
+            _on_swap.append(self.pet.request_swap)
             if visible:
                 self.start()
 
@@ -2973,7 +3175,7 @@ def build_app(opts, tips):
             now = GLib.get_monotonic_time() / 1e6
             self.pet.saw_activity(now)
             debug("intro: first run, saying hello")
-            self.pet.say("Yoru",
+            self.pet.say(self.pet.character.label,
                          "I know the Omarchy manual. Right click for a tip, "
                          "left click one to say you already know it and retire "
                          "it, middle click (three fingers on a trackpad) to "
@@ -2995,7 +3197,8 @@ def build_app(opts, tips):
             key = self.pet.render_key() + (self._palette,)
             if key == self._key:
                 return True             # same pixels as last frame; no draw
-            if self._key is None or key[:2] != self._key[:2]:
+            if (self._key is None or key[:2] != self._key[:2]
+                    or key[-1] != self._key[-1]):     # moved, or a new canvas
                 surface = self.win.get_surface()
                 if surface is not None:
                     # The input region follows him, and nothing else. Hidden
@@ -3042,14 +3245,15 @@ def run(opts, tips):
               "yes" if shutil.which("hyprctl") else "no",
               "GLibUnix" if GLibUnix else "GLib (deprecated)")
         debug("start: %d tips | %d seen, %d retired, %d shown, %d passes | "
-              "introduced %s | home %s | %s", len(tips), len(load_seen()),
+              "introduced %s | home %s | %s | as %s", len(tips), len(load_seen()),
               len(load_known()), st.get("shown", 0), st.get("passes", 0),
               bool(st.get("introduced")),
-              load_home() or "default %s" % opts.corner, CONFIG)
+              load_home() or "default %s" % opts.corner, CONFIG, opts.sprite)
     # Dispatched from the main loop, not from inside the signal handler, so
     # the flip can never land in the middle of a frame.
     add = GLibUnix.signal_add if GLibUnix else GLib.unix_signal_add
     add(GLib.PRIORITY_DEFAULT, signal.SIGUSR1, toggle_visible)
+    add(GLib.PRIORITY_DEFAULT, signal.SIGUSR2, request_swap)
     return build_app(opts, tips).run([])
 
 

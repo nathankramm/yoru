@@ -15,6 +15,7 @@ def ck(n, ok, d=""):
     print(("  PASS  " if ok else "  FAIL  ") + n + (("  " + str(d)) if d else ""))
     if not ok: F.append(n)
 
+
 src = open(os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "yoru.py")).read()
 ck("1 hide toggle", "SIGUSR1" in src and "--start-hidden" in src)
@@ -436,7 +437,7 @@ ck("34 --still never moves", moved == 0 and poses == 0 and modes == 0 and blinks
    % (moved, poses, modes, blinks, "yes" if spoke else "NO"))
 # Redraw-on-change: the key is stable across a static stretch and changes
 # on every frame of a walk, so skipping equal keys cannot drop motion.
-q = m.Pet(O, m.KNOWLEDGE); q.seen = set(); q.next_talk = 1e9; q.next_roam = 1e9; q.next_graze = 1e9
+q = m.Pet(O, m.KNOWLEDGE); q.seen = set(); q.next_talk = q.next_roam = q.next_graze = 1e9
 q.blink = q.ear = q.tail = 0; q.next_blink = q.next_ear = q.next_tail = 1e9
 for i in range(30): q.step(.033, i * .033, 1920, 1080)      # he is away here: let him lie down first
 q.chews_left = 0; q.chew = False; q.next_chew = 1e9         # ...and hold his jaw too
@@ -835,4 +836,303 @@ ck("42 binding re-check runs on its own source under --no-theme, and throttles a
    % (started_nt, calls["refresh"] - before, here, away))
 nt.stop(); nt.win.destroy()
 m.apply_theme, m.read_theme, m.refresh_suppressed = real_apply, real_read, real_refresh
+# ---------------------------------------------------------- characters ----
+# Two characters, one Pet. Each is data the Pet reads -- canvas, scale,
+# views, gaits, walk step, a pixels() with the deer's signature -- and
+# every sprite check below runs per character from that data, never from
+# a number written into the check.
+chars = dict(m.SPRITES)
+ck("57 two characters, the deer the default, each with a canvas, a scale, a roam and a mirror of its own",
+   set(chars) >= {"yoru", "dane"} and m.DEFAULT_SPRITE == "yoru"
+   and all(callable(c.pixels) and c.w > 0 and c.h > 0 and c.scale > 0 for c in chars.values())
+   and (chars["yoru"].w, chars["yoru"].h, chars["yoru"].scale, chars["yoru"].roams, chars["yoru"].mirrors)
+   == (m.SW, m.SH, 4, True, True)
+   and chars["yoru"].gaits == ("walk", "bound") and not chars["yoru"].views
+   and not chars["dane"].roams and not chars["dane"].mirrors and chars["dane"].gaits == ()
+   and chars["dane"].turn == m.DANE_TURN == ("work", "folding", "closing", "speak")
+   and not chars["dane"].tics
+   and "flip = pet.dir < 0 and ch.mirrors" in src,
+   {n: "%dx%d @%dx %s %s %s; idle every %d-%ds for %d-%ds" % (
+       c.w, c.h, c.scale, "roams " + "/".join(c.gaits) if c.roams else "stays",
+       "mirrors" if c.mirrors else "fixed",
+       "states " + "/".join(c.turn) if c.turn else "one view",
+       c.idle_every[0], c.idle_every[1], c.idle_for[0], c.idle_for[1])
+    for n, c in chars.items()})
+# Bounds, from the canvas. The deer overhangs his by design (the graze
+# shift, the bound's lift), by the margins check 26 allows; The Dane's
+# scene stays inside his, so a wider canvas later is a data change.
+c = chars["dane"]
+DANE_POSES = ("stand", "graze", "rest", "settle")
+def dane_frames():
+    for view in c.turn:
+        for pose in DANE_POSES:
+            for blink in (False, True):
+                for doze in (0, 1):
+                    for tic in (0, 1):
+                        yield (view, pose, blink, doze, tic), m.dane_pixels(1, blink, pose, 0, 0, None, 0, doze, view=view, tic=tic)
+oob = [k for k, pts in dane_frames() if any(not (0 <= x < c.w and 0 <= y < c.h) for x, y, _ in pts)]
+grounded = all(max(y for _, y, _ in pts) == c.h - 1 for _, pts in dane_frames())
+ck("58 the dane's scene inside his %dx%d canvas in every view and frame, the desk on its last row" % (c.w, c.h),
+   not oob and grounded, "%s out of bounds; on the ground line: %s" % (oob[:3] or "none", grounded))
+lonely = []; multi = []
+for k, pts in dane_frames():
+    pset = {(x, y) for x, y, _ in pts}
+    lonely += [(k, p) for p in pset if not neighbors(p, pset)]
+    n = components(pset)
+    if n > 1: multi.append((k, n))
+ck("59 the dane's scene one piece, no floating pixel, in every view and frame",
+   not lonely and not multi, "floating %s; pieces %s" % (lonely[:2] or "none", multi[:3] or "none"))
+# The desk. It is drawn over him: the tabletop is the desk tone and
+# nothing else in the composited frame; beneath it his legs are there in
+# every state -- seated, on the chair, not floating -- and the desk's
+# legs stand on the ground row. The lid is whatever the view says and
+# a slab with his head down, and it folds seven rows to five to three to
+# one, in even steps, so no frame of the fold is twice another. The near
+# forearm is at the keys only while he is working -- an idle action takes
+# it away and the check knows which poses those are from the character's
+# own paths -- and the far one never moves at all. And the eyes: down
+# while he works, and while he reaches for the coffee, and while his
+# hand is at his beard; up, white and iris, only to speak. That is the
+# turn-away, and it is the one rule here with research behind it.
+pal = m.dane_palette(); P, E, K, FAR_T, B, kk = pal["P"], pal["E"], pal["K"], pal["F"], pal["B"], pal["k"]   # not F: that is the failure list
+through = []; lids = {}; hands = {}; gaze = {}
+for k, pts in dane_frames():
+    comp = {}
+    for x, y, col in pts: comp[(x, y)] = col
+    y0, y1, x0, x1 = m.DESK_TOP
+    if any(comp.get((x, y)) != P for y in range(y0, y1 + 1) for x in range(x0, x1 + 1)):
+        through.append((k, "tabletop"))
+    if not all(comp.get((x, 47)) == FAR_T for _, _, lx0, lx1 in m.DESK_LEGS for x in (lx0, lx1)):
+        through.append((k, "desk legs off the ground"))
+    if not any(comp.get((x, 47)) == B for x in range(m.DESK_TOP[2], m.DESK_TOP[3])):
+        through.append((k, "no shoe on the ground under the desk"))
+    LAP = (B, FAR_T)                      # the lid's back and its rim / the base
+    lids[k] = next((state for state, (ly0, ly1, lx0, lx1) in m.LAPTOP_LID.items()
+                    if all(comp.get((x, y)) in LAP for y in range(ly0, ly1 + 1) for x in range(lx0, lx1 + 1))
+                    and comp.get(((lx0 + lx1) // 2, ly0 - 1)) not in LAP), None)   # above its middle: his shirt or the O, never his sleeve
+    # The forearms, checked against the other frames rather than against
+    # the table they came from, which would only be reading the data back:
+    # upright, the far arm is the same pixels in every frame, and nothing
+    # on the keyboard row is ever skin, which is the whole of "the hands
+    # stay behind the lid".
+    skin = (pal["K"], kk)
+    if k[1] in ("rest", "settle"):
+        hands[k] = None
+    else:
+        # left of the lid's own edge, so the comparison is between frames
+        # of the arm and not between how much of it each lid uncovers
+        far = tuple(sorted((x, y) for (x, y), col in comp.items()
+                           if col == kk and 29 <= y <= 33 and x < m.LAPTOP_BASE[2]))
+        keys_row = any(comp.get((x, m.LAPTOP_BASE[0])) in skin for x in range(c.w))
+        hands[k] = (far, keys_row)
+    dx, dy = m.DANE_SEAT
+    if k[1] == "settle": dx, dy = dx + m.DANE_SETTLE_HEAD[0], dy + m.DANE_SETTLE_HEAD[1]
+    (fw, fi), (nw, ni) = m.EYES["far"], m.EYES["near"]
+    up = all(comp.get((w[0] + dx, w[1] + dy)) == pal["W"] and comp.get((i[0] + dx, i[1] + dy)) == E
+             for w, i in ((fw, fi), (nw, ni)))
+    # working: the head is tilted a row, the lids are the skin shadow or the dropped brow, the
+    # iris a row under; and nothing on his face is the accent but the irises (the glow that was
+    # drawn there read as a rash on a green-accent theme -- see the comment at EYES)
+    t = m.TILT; HAIR = pal["H"]
+    down = all(comp.get((w[0] + dx, w[1] + dy + t)) in (kk, HAIR) and comp.get((i[0] + dx, i[1] + dy + t)) in (kk, HAIR)
+               and comp.get((i[0] + dx, i[1] + dy + t + 1)) == E for w, i in ((fw, fi), (nw, ni)))
+    irises = {(i[0] + dx, i[1] + dy + (t + 1 if down else 0)) for _, i in ((fw, fi), (nw, ni))}
+    face = [(x, y) for (x, y), col in comp.items() if col == E and 5 <= y < 25 and 16 <= x < 40 and (x, y) not in irises]
+    if face:
+        gaze[k] = "accent on the face at %s" % face[:3]; continue
+    shut = all(comp.get((i[0] + dx, i[1] + dy)) in (K, kk) for _, i in ((fw, fi), (nw, ni)))
+    gaze[k] = "up" if up else "down" if down else "hidden" if k[1] == "rest" else "shut" if shut else "?"
+want_lid = {k: "speak" if k[1] in ("rest", "settle") else k[0] for k in lids}
+far_ref = next(v[0] for k, v in hands.items() if v is not None and k[1] == "stand")
+want_open = {k: None if hands[k] is None else (far_ref, False) for k in lids}
+# the fold, in rows of lid still standing: even steps, no frame twice another
+fold = [m.LAPTOP_LID[v][1] - m.LAPTOP_LID[v][0] + 1 for v in c.turn]
+steps = [a - b for a, b in zip(fold, fold[1:])]
+# rest hides the eyes; a blink or a doze shuts them; the settle frame looks down
+# (a doze is a rest thing: the Pet never dozes elsewhere, and the settle ignores it)
+want_gaze = {k: "hidden" if k[1] == "rest" else "shut" if (k[2] or (k[3] and k[1] != "settle"))
+             else "up" if k[0] == "speak" and k[1] != "settle" else "down" for k in gaze}
+ck("60 the desk: tabletop clean, his legs on the chair beneath it; the lid is the view's and a slab to speak or rest, and folds in even steps; the forearms to the desk and behind the lid, still; eyes down working, up speaking",
+   not through and lids == want_lid and hands == want_open and gaze == want_gaze
+   and len(fold) >= 4 and len(set(steps)) == 1 and steps[0] > 0,
+   "desk wrong in %s; lid wrong in %s; forearms wrong in %s; gaze wrong in %s; fold %s rows (steps %s); far arm %d px, same in all %d upright frames" % (
+       through[:2] or "none", [(k, lids[k]) for k in lids if lids[k] != want_lid[k]][:2] or "none",
+       [k for k in hands if hands[k] != want_open[k]][:2] or "none",
+       [(k, gaze[k]) for k in gaze if gaze[k] != want_gaze[k]][:2] or "none",
+       "-".join(str(f) for f in fold), set(steps),
+       len(far_ref), sum(1 for v in hands.values() if v is not None)))
+# Legibility in every shipped theme, for what is on the silhouette: every
+# colour on an edge pixel, in every view, against the background the halo
+# is drawn in. 1.4 is a soft edge that still reads on the sheet; the
+# deer's own hooves on the light themes are what set it. The natural
+# colours are nudged where they would fall under NATURAL_MIN, and which
+# themes needed that is reported, not hidden.
+def edge_colors(pts):
+    pset = {(x, y) for x, y, _ in pts}
+    return {col for x, y, col in pts if len(neighbors((x, y), pset)) < 8}
+weak = []; nudged = collections.defaultdict(list); tightest = (9, "", "")
+m.THEME_COLORS = os.path.join(os.environ["HOME"], ".local/state/omarchy/current/theme/colors.toml")  # check 24 pointed it at nothing
+for f in themes:
+    shutil.copy(f, m.THEME_COLORS); m.apply_theme(); name = f.split("/")[-2]
+    pal = m.dane_palette(); byc = {v: k for k, v in pal.items()}
+    for k, v in m.DANE_NATURAL.items():
+        if pal[k] != v: nudged[name].append(k)
+    for view in c.turn:
+        for col in edge_colors(m.dane_pixels(1, False, "stand", view=view)):
+            r = m._contrast(col, m.OUTLINE)
+            if r < tightest[0]: tightest = (r, name, byc.get(col, "?"))
+            if r < 1.4: weak.append((name, view, byc.get(col, "?"), round(r, 2)))
+os.remove(m.THEME_COLORS); m.PAL.update(BUILTIN); m.apply_theme()
+ck("61 the dane's scene legible in every shipped theme: every edge colour 1.4+ against the halo, every view",
+   not weak and len(themes) > 0,
+   "%d themes; tightest %s %s at %.2f; under 1.4: %s; natural colours nudged in: %s" % (
+       len(themes), tightest[1], tightest[2], tightest[0], weak or "none",
+       ", ".join("%s (%s)" % (t, "".join(v)) for t, v in sorted(nudged.items())) or "none"))
+# The swap. SIGUSR2 is installed beside SIGUSR1 and calls request_swap,
+# which the running app has hooked to its Pet: on a real activated app,
+# the character changes with no restart, through the settle frame, at the
+# same spot facing the same way, and state.json remembers it -- so the
+# next start, with no flag, is the same character. --sprite sets and saves.
+ck("62 swap signal wired", "SIGUSR2" in src and "request_swap" in src and "--swap" in src
+   and "_on_swap.append" in src)
+sw = m.build_app(types.SimpleNamespace(**dict(vars(O), scale=None, no_theme=True, no_context=True, quiet=True,
+                                               start_hidden=False, layer="overlay", monitor=None,
+                                               topics="", sprite="yoru")), m.KNOWLEDGE)
+sw.set_application_id("dev.local.yoru.audit")     # nt above still holds the real id
+sw.set_flags(Gio.ApplicationFlags.NON_UNIQUE); sw.register()
+m.visible = True; m._on_swap.clear(); sw.do_activate()
+sw.pet.place(1920, 1080); sw.pet.present_until = 1e9
+was = (sw.pet.character.name, sw.pet.x, sw.pet.y + sw.pet.h, sw.pet.dir, sw.pet.snooze_until, sw.pet.px)
+m.request_swap()                                # exactly what the signal calls
+seen_poses = []; keys = set()
+for _ in range(12):
+    sw.tick(); seen_poses.append(sw.pet.pose); keys.add(sw.pet.render_key()[-1])
+    time.sleep(0.02)
+now_ = (sw.pet.character.name, sw.pet.x, sw.pet.y + sw.pet.h, sw.pet.dir, sw.pet.snooze_until, sw.pet.px)
+saved = m.read_state().get("sprite")
+again = m.Pet(types.SimpleNamespace(**dict(vars(O), scale=None, sprite=m.sprite_choice(None))), m.KNOWLEDGE)
+flagged = m.sprite_choice("yoru"); flagged_saved = m.read_state().get("sprite")
+ck("63 swap switches the running character through the settle, same spot, feet on the ground, same facing; it persists",
+   was[0] == "yoru" and now_[0] == "dane" and now_[1:5] == was[1:5] and (was[5], now_[5]) == (4, 2)
+   and "settle" in seen_poses and seen_poses[-1] == "stand" and keys == {"yoru", "dane"} and saved == "dane"
+   and again.character.name == "dane" and flagged == "yoru" and flagged_saved == "yoru",
+   "%s @%dx -> %s @%dx; poses %s; x and ground line kept %s; state.json %r; next start %s; --sprite yoru -> %s saved %r" % (
+       was[0], was[5], now_[0], now_[5], "".join("s" if p == "settle" else "." for p in seen_poses),
+       now_[1:5] == was[1:5], saved, again.character.name, flagged, flagged_saved))
+# Canvas and scale follow the character. A taller stand-in swapped in
+# keeps the feet on the ground line: the bottom edge stays, the top
+# rises, and w/h and the input region come from the new canvas at the
+# new scale. --scale overrides every character's own.
+tall = m.Character("tall", "Tall", m.dane_pixels, (48, 64), 3, ("walk",), 4.4, (0.5, 0.7), views=m.DANE_VIEWS)
+m.SPRITES["tall"] = tall
+try:
+    p = sw.pet; bottom = p.y + p.h; hb = p.home_y + p.h
+    p.request_swap("tall"); p.pose = "stand"
+    for _ in range(12): sw.tick(); time.sleep(0.02)
+    grew = (p.character.name == "tall" and p.px == 3 and p.h == 64 * 3 and p.y + p.h == bottom
+            and p.home_y + p.h == hb)
+    p.request_swap("dane")
+    for _ in range(12): sw.tick(); time.sleep(0.02)
+    back = p.character.name == "dane" and p.px == 2 and p.y + p.h == bottom
+finally:
+    del m.SPRITES["tall"]
+    st = m.read_state(); st["sprite"] = "yoru"; m.save_json(m.STATE, st)
+forced = m.Pet(types.SimpleNamespace(**dict(vars(O), scale=3, sprite="dane")), m.KNOWLEDGE)
+forced_deer = m.Pet(types.SimpleNamespace(**dict(vars(O), scale=3, sprite="yoru")), m.KNOWLEDGE)
+ck("64 canvas and scale are the character's: a 48x64 @3x stand-in keeps his feet on the ground line; --scale overrides both",
+   grew and back and forced.px == 3 and forced.w == chars["dane"].w * 3 and forced_deer.px == 3 and forced_deer.w == 24 * 3,
+   "grew %s, back %s; --scale 3: dane %dpx wide, deer %dpx" % (grew, back, forced.w, forced_deer.w))
+# The Dane never roams: a character with roams=False stays home for the
+# hour, so the walk, the bound and the trips are the deer's alone; the
+# deer's pace still resolves to the 46-72 px/s he always had.
+random.seed(3)
+q = m.Pet(types.SimpleNamespace(**dict(vars(O), scale=None, sprite="dane")), m.KNOWLEDGE)
+q.seen = set(); q.present_until = 1e9; q.next_talk = 1e9; q.step(.033, 0.0, 1920, 1080)
+modes = collections.Counter(); t = 0.0; moved = 0
+for i in range(int(3600 / .033)):
+    t += .033; q.step(.033, t, 1920, 1080); modes[q.mode] += 1
+    if q.moving() or q.gait(): moved += 1
+deer = m.Pet(types.SimpleNamespace(**dict(vars(O), scale=None, sprite="yoru")), m.KNOWLEDGE)
+random.seed(1); deer_speeds = [deer.walk_speed() for _ in range(200)]
+ck("65 the dane never roams -- home all hour, no gait, no trip; the deer's pace is his old 46-72",
+   modes["home"] == sum(modes.values()) and moved == 0 and q.x == q.home_x
+   and 46 - 1e-6 <= min(deer_speeds) and max(deer_speeds) <= 72 + 1e-6,
+   "1h: modes %s, moving frames %d; deer %.0f-%.0f px/s" % (dict(modes), moved, min(deer_speeds), max(deer_speeds)))
+# The turn, as motion rather than as a list of drawings. Speaking walks
+# him along his turn path and back when the bubble clears; the render key
+# moves on each change, so every step of the fold is a frame that is
+# actually drawn, and each one is held long enough to be seen -- which is
+# the thing a sheet of stills cannot tell you and the reason these are
+# measured in milliseconds here. The deer has no views and no tic and is
+# drawn from the side whatever the Pet says: draw_sprite passes them only
+# to a character that declares them.
+DT = .033
+def run_views(q, secs, t0=0.0):
+    """Every view he holds, with how long he holds it, in milliseconds."""
+    out = [[q.view, 0]]
+    t = t0
+    for _ in range(int(secs / DT)):
+        t += DT; q.step(DT, t, 1920, 1080)
+        if q.view != out[-1][0]: out.append([q.view, 0])
+        out[-1][1] += DT * 1000
+    return out, t
+q = m.Pet(types.SimpleNamespace(**dict(vars(O), scale=None, sprite="dane")), m.KNOWLEDGE)
+q.present_until = 1e9; q.next_talk = q.next_graze = 1e9; q.step(DT, 0.0, 1920, 1080)
+keys = [q.render_key()]; t = 0.0
+q.say("x", "hello", 1.0, 0.0)
+held = [[q.view, 0.0]]
+for _ in range(int(3.0 / DT)):
+    t += DT; q.step(DT, t, 1920, 1080)
+    if q.view != held[-1][0]:
+        held.append([q.view, 0.0]); keys.append(q.render_key())
+    held[-1][1] += DT * 1000
+seq = [v for v, _ in held]
+# the frames he passes through, which are the ones TURN_SECS times. Not
+# the two ends, where he simply stays, and not the front one, which is
+# held for as long as the bubble is up.
+mid = [ms for v, ms in held[1:-1] if v != chars["dane"].turn[-1]]
+want_ms = m.TURN_SECS * 1000
+# working, for a minute: the render key moves only for the blink
+moves = collections.Counter(); last = q.render_key()
+for i in range(int(60 / DT)):
+    t += DT; q.step(DT, t, 1920, 1080); key = q.render_key()
+    if key != last:
+        moves[tuple(i for i, (x, y) in enumerate(zip(key, last)) if x != y)] += 1
+    last = key
+blink_i = 5                                                 # render_key(): ..., pose, blink, ...
+ck("66 speaking folds the laptop down a frame at a time and back, every frame of it drawn and held a TURN_SECS; working, nothing moves but the blink",
+   seq == ["work", "folding", "closing", "speak", "closing", "folding", "work"]
+   and all(a != b for a, b in zip(keys, keys[1:]))
+   and all(abs(ms - want_ms) <= 40 for ms in mid)
+   and moves and set(moves) == {(blink_i,)} and "tic" not in chars["dane"].tics,
+   "states %s; held %s (TURN_SECS is %.0fms); every step a new render key %s; a working minute: key moved %d times, fields %s" % (
+       " -> ".join(seq), ", ".join("%.0fms" % ms for ms in mid), want_ms,
+       all(a != b for a, b in zip(keys, keys[1:])),
+       sum(moves.values()), sorted(set(moves)) or "none"))
+# The accent, everywhere, not just on his face. Check 60 watched the face
+# because that is where a glow was once drawn and read as a rash; this
+# watches the whole canvas, because the thing that actually got through
+# was two pixels of the O on his chest walking out from behind the desk
+# at the settle frame and sitting under the table. The rule is simple
+# enough to state absolutely: the accent is his irises and the letter on
+# his shirt, and nothing else in the scene is ever it.
+O_MARK = {(x + m.DANE_SEAT[0], y + m.DANE_SEAT[1])
+          for y, row in enumerate(m.DANE_FRONT) for x, ch in enumerate(row) if ch == "A"}
+loose = []; irises = 0
+for k, pts in dane_frames():
+    view, pose, blink = k[0], k[1], k[2]
+    comp = {(x, y): col for x, y, col in pts}
+    acc = {p for p, col in comp.items() if col == E}
+    eyes = {p for p in acc if p[1] < m.DESK_TOP[0] - 10 and p not in O_MARK}
+    stray = acc - O_MARK - eyes
+    if stray:
+        loose.append((k, sorted(stray)[:3]))
+    # and the eyes are two irises, or none at all when they are shut
+    if pose != "rest" and len(eyes) not in (0, 2):
+        loose.append((k, "%d irises" % len(eyes)))
+    irises += len(eyes)
+ck("70 the accent is his irises and the O on his shirt, and nothing else in the scene is ever it, in any view or pose",
+   not loose, "%d frames, %d irises among them; loose accent at %s"
+   % (sum(1 for _ in dane_frames()), irises, loose[:3] or "none"))
+sw.stop(); sw.win.destroy()
 print("\n%d/%d  FAILURES: %s" % (N - len(F), N, F or "none"))

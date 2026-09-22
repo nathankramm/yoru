@@ -1,7 +1,7 @@
 #!/bin/bash
-# Reverse install.sh: the binary, the autostart line and the hide/show binding
-# go; ~/.config/yoru (his position, what he has said, what you retired) is
-# asked about first.
+# Reverse install.sh: the binary, the autostart line and the hide/show and
+# swap bindings go; ~/.config/yoru (his position, what he has said, what you
+# retired, which character he is) is asked about first.
 set -euo pipefail
 
 bin="$HOME/.local/bin/yoru"
@@ -33,16 +33,17 @@ else
   did+=("no yoru line in $autostart")
 fi
 
-if [[ -f $bindings ]] && grep -Eq '^[^-]*bind\(.*USR1.*bin/yoru' "$bindings"; then
+if [[ -f $bindings ]] && grep -Eq '^[^-]*bind\(.*USR[12].*bin/yoru' "$bindings"; then
   backup="$bindings.bak-$(date +%Y%m%d-%H%M%S)"
   cp -- "$bindings" "$backup"
-  # Drop the toggle bind and the comment install.sh put above it, nothing else.
-  grep -Ev '^[^-]*bind\(.*USR1.*bin/yoru|^-- Yoru, the Omarchy assistant: hide and show him \(added by install\.sh\)$' \
+  # Drop the toggle and swap binds and the comments install.sh put above
+  # them, nothing else.
+  grep -Ev '^[^-]*bind\(.*USR[12].*bin/yoru|^-- Yoru, the Omarchy assistant: (hide and show him|swap the character) \(added by install\.sh\)$' \
     "$bindings" >"$bindings.tmp"
   mv -- "$bindings.tmp" "$bindings"
-  did+=("removed the toggle binding from $bindings (backup: $backup)")
+  did+=("removed the toggle and swap bindings from $bindings (backup: $backup)")
 else
-  did+=("no toggle binding in $bindings")
+  did+=("no toggle or swap binding in $bindings")
 fi
 
 printf '%s\n' "${did[@]}"

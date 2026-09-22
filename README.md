@@ -7,6 +7,11 @@ Omarchy. He knows 194 things about it, notices which app you're in,
 follows your theme, and — unlike his spiritual ancestor — shuts up when you
 tell him to.
 
+He has company. **The Dane — named in honour of Omarchy's creator** — is a
+second character who knows everything the deer knows and says it with the
+same straight face: `yoru --sprite dane`, or `Super + Ctrl + Shift + Y` to
+swap while he's running. See [The Dane](#the-dane).
+
 <p align="center">
   <img src="docs/yoru-motion.gif" alt="Yoru resting, grazing, speaking and bounding" width="520"><br>
   <sub>Twenty-five seconds. Smaller and sharper as <a href="docs/yoru-motion.mp4">MP4</a>.</sub>
@@ -164,11 +169,13 @@ cd yoru
 
 No sudo. It checks the four dependencies and prints the `pacman` line if any
 are missing, puts `yoru.py` at `~/.local/bin/yoru`, adds one
-`o.launch_on_start` line to `~/.config/hypr/autostart.lua` and one `o.bind`
-line for `Super + Ctrl + Y` to `~/.config/hypr/bindings.lua` (backing each up
-first, and only if no yoru line is there already — running it twice is safe).
-Autostart takes effect at your next login; until then, `yoru &`. The binding
-is live after `hyprctl reload`.
+`o.launch_on_start` line to `~/.config/hypr/autostart.lua` and two `o.bind`
+lines to `~/.config/hypr/bindings.lua` — `Super + Ctrl + Y` to hide him,
+`Super + Ctrl + Shift + Y` to swap him for The Dane (backing each file up
+first, and only the lines that aren't there already — running it twice is
+safe, and a bind you made by hand for either signal is left alone). Autostart
+takes effect at your next login; until then, `yoru &`. The bindings are live
+after `hyprctl reload`.
 
 Try the knobs before committing to them:
 
@@ -219,14 +226,20 @@ spelled out (the launcher runs before your shell has expanded anything):
 o.launch_on_start("/home/you/.local/bin/yoru")
 ```
 
-And one in `~/.config/hypr/bindings.lua`, so `Super + Ctrl + Y` can hide and
-show him. The pattern is the full path with a boundary after it, because
-`SIGUSR1` kills any process that has no handler for it — a looser pattern
-could reach an editor that happens to have the file open:
+And two in `~/.config/hypr/bindings.lua`: `Super + Ctrl + Y` to hide and
+show him, `Super + Ctrl + Shift + Y` to swap the character. The pattern is
+the full path with a boundary after it, because `SIGUSR1` and `SIGUSR2` kill
+any process that has no handler for them — a looser pattern could reach an
+editor that happens to have the file open:
 
 ```lua
 o.bind("SUPER + CTRL + Y", "Toggle Yoru", "pkill -USR1 -f 'python3 /home/you/.local/bin/yoru( |$)'")
+o.bind("SUPER + CTRL + SHIFT + Y", "Swap Yoru", "pkill -USR2 -f 'python3 /home/you/.local/bin/yoru( |$)'")
 ```
+
+Neither key is bound in Omarchy 4.0.4 (`Super + Shift + Y` is YouTube;
+`Super + Ctrl + Y` and `Super + Ctrl + Shift + Y` are free). Checked against
+the installed release, not the branch.
 
 </details>
 
@@ -242,10 +255,14 @@ o.bind("SUPER + CTRL + Y", "Toggle Yoru", "pkill -USR1 -f 'python3 /home/you/.lo
 | **Middle click** | Snooze one hour. He lies down; again to wake him. On a trackpad, three fingers — a tap or a press, both work out of the box |
 | **Drag** | Move him. The spot is remembered across reboots |
 | **Super + Ctrl + Y** | Hide him entirely. Again to bring him back |
+| **Super + Ctrl + Shift + Y** | Swap the character: the deer for The Dane, and back. Same spot, same way round, same everything |
 
-That last one is a Hyprland binding `install.sh` puts in your `bindings.lua`.
-It sends `SIGUSR1` and the process keeps running, so his position, snooze
-state and which tips he's seen all survive.
+The last two are Hyprland bindings `install.sh` puts in your `bindings.lua`.
+They send `SIGUSR1` and `SIGUSR2` and the process keeps running, so his
+position, snooze state and which tips he's seen all survive either one. The
+swap goes through the same held settle frame as lying down, so it's a
+change, not a cut, and the choice is written to `state.json` — he comes back
+as whoever he was. `yoru --swap` sends the same signal from a terminal.
 
 From the terminal, no GUI involved:
 
@@ -265,7 +282,7 @@ yoru --forget-known       # un-retire everything
 | `--cooldown` | 90 | minimum quiet before a contextual tip |
 | `--corner` | `br` | `br`, `bl`, `tr`, `tl` — where he parks on first run |
 | `--margin` | 24 | pixels from the side edge on first run. The bottom edge is the ground, so `br`/`bl` stand on it with no gap; `tr`/`tl` keep the gap below the bar, since there's nothing to stand on up there |
-| `--scale` | 4 | pixel size |
+| `--scale` | each character's own | screen pixels per sprite pixel, for every character; the deer's is 4, The Dane's is set per character alongside his canvas |
 | `--topics` | | e.g. `nvim,tmux` — limit him |
 | `--quiet` | | contextual tips only |
 | `--no-context` | | ignore the focused window |
@@ -275,6 +292,8 @@ yoru --forget-known       # un-retire everything
 | `--no-packages` | | teach software whether or not `pacman` says it's installed |
 | `--start-hidden` | | begin off screen |
 | `--still` | | never walk, bound or graze — for anyone who finds movement at the edge of vision distracting; he still blinks and talks |
+| `--sprite` | saved, else `yoru` | which character: `yoru` (the deer) or `dane` (The Dane). Remembered in `state.json`, so it survives a restart; given, it overwrites the memory |
+| `--swap` | | swap the running instance's character (`SIGUSR2`) and exit — what `Super + Ctrl + Shift + Y` does |
 | `--version` | | print the version and exit |
 | `--monitor` | focused | connector to live on, e.g. `DP-1`; if it isn't connected he warns and takes the focused one |
 | `--layer` | `overlay` | `overlay` stays above full-screen windows; `top` goes under them; `bottom` and `background` sit behind everything |
@@ -352,6 +371,56 @@ all: no stepping, no polling, until you bring him back, with everything as it
 was. When you're away, or he's snoozed, the compositor and theme polls slow
 from every few seconds to every thirty, and the first sign of you snaps them
 back — the window you came back to still gets its tip.
+
+---
+
+## The Dane
+
+**The Dane — named in honour of Omarchy's creator.** A 48×48 man in a plain
+tee with a letter O on the chest in the theme's accent, long wavy hair to
+the collar, a beard. He is played exactly the way the deer is: the humour
+is in the dry lines and never in the movement, and he does ordinary things
+with total seriousness. Nothing goofy.
+
+He lives at a desk, facing you. A tabletop on two slim legs, him seated
+behind it with his legs showing beneath, a laptop open on the desk facing
+him — so what you see is the back of the lid — and a mug beside it. He
+works, and while he works the only thing that moves is his blink: his
+hands are behind the lid, where a keyboard is. He doesn't roam: wandering out and back is
+grazing behaviour, right for an animal, and a man doing it reads as
+pacing. The deer still roams; whether a character does is his own data.
+Dragging moves the whole scene; it doesn't mirror.
+
+The turn-away is in his eyes. The research is about an agent that
+appears to watch you, and gaze is what signals watching: while he works
+his eyes are down, on the laptop, so he isn't watching you. Speaking, he closes the laptop: the lid
+folds down toward him over two held frames, seven rows of screen to five
+to three to one, so it reads as a lid coming down and not as a cut. Then
+he looks up at you, and speaks. Closing the laptop is the point: he stops
+what he is doing to address you. When the bubble clears he opens it
+again, a frame at a time, and his eyes go back down. Snoozed, or once
+you've been away, his head goes down on folded arms on the desk, through
+one held frame each way. The props take the theme through the same tones
+as his clothes.
+
+Everything that isn't the drawing is the same code. He says the same 194
+things, notices the same apps, keeps the same cadence, turns away from you
+the same way, and answers the same clicks. His skin, hair and beard are
+natural colours and stay put; the shirt, trousers, shoes and the O are the
+theme's, through the very tones the deer's coat, antlers and hooves are
+made of, so the two recolour together. On a theme whose background is
+close to his hair or his skin, that colour moves the one shade it needs to
+keep its edge — nine of the twenty-two shipped themes, and the audit names
+them.
+
+Start as him with `yoru --sprite dane`; swap while running with
+`Super + Ctrl + Shift + Y` (or `yoru --swap`). The choice is remembered.
+The deer stays the default.
+
+A third character would be its maps, a palette of roles and a pose table,
+with a canvas size and a pixel scale of its own — the Pet reads all of it
+from the character and nothing else, and the sprite checks in
+`tools/audit.py` run from the same data.
 
 ---
 
@@ -469,6 +538,7 @@ precisely the predatory quality that made Clippy hated.
 | **Program/Feature Name** | The Omarchy Assistant |
 | **Software** | Omarchy 4 "Quattro" · Hyprland · Wayland |
 | **Nickname** | The deer |
+| **The other one** | The Dane, named in honour of Omarchy's creator |
 | **Predecessor** | Clippit, the Microsoft Office Assistant (1997–2007), may he rest |
 
 ---
@@ -476,6 +546,7 @@ precisely the predatory quality that made Clippy hated.
 ## Credits
 
 - [Omarchy][omarchy] by DHH and contributors — every tip is traced to its shipped files
+- Omarchy's creator, for the operating system that made Yoru worth building — The Dane is named in his honour
 - Luke Swartz, [*Why People Hate the Paperclip*][swartz], Stanford, 2003
 - [gtk4-layer-shell][gls] by William Wold
 - Clippit, designed by Kevan Atteberry, 1997

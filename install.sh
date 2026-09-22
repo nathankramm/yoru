@@ -1,7 +1,8 @@
 #!/bin/bash
 # Install Yoru for the current user. Nothing here needs root: the binary goes
 # to ~/.local/bin, the autostart line to ~/.config/hypr/autostart.lua and the
-# hide/show binding to ~/.config/hypr/bindings.lua. Running it twice is safe.
+# hide/show and swap bindings to ~/.config/hypr/bindings.lua. Running it
+# twice is safe.
 set -euo pipefail
 
 here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -22,6 +23,10 @@ bindings="$HOME/.config/hypr/bindings.lua"
 # and not the sh -c Hyprland runs this bind through, whose own command line
 # contains the pattern text followed by a parenthesis.
 toggle="o.bind(\"SUPER + CTRL + Y\", \"Toggle Yoru\", \"pkill -USR1 -f 'python3 $bin( |\$)'\")"
+# Super + Ctrl + Shift + Y swaps the character -- the deer or The Dane --
+# in the running instance, the same way: SIGUSR2, same pattern. Unbound in
+# Omarchy 4.0.4 (Super + Shift + Y is YouTube; Super + Ctrl + Y is ours).
+swap="o.bind(\"SUPER + CTRL + SHIFT + Y\", \"Swap Yoru\", \"pkill -USR2 -f 'python3 $bin( |\$)'\")"
 did=()
 
 # -- dependencies ------------------------------------------------------------
@@ -62,21 +67,32 @@ else
   did+=("added to $autostart: $line")
 fi
 
-# -- hide/show binding ----------------------------------------------------------
-# Any uncommented bind that sends USR1 to a yoru binary counts as present,
-# whatever key it is on, so a toggle you set up by hand is never duplicated.
-if [[ -f $bindings ]] && grep -Eq '^[^-]*bind\(.*USR1.*bin/yoru' "$bindings"; then
-  did+=("toggle binding already in $bindings")
-else
-  mkdir -p "$(dirname -- "$bindings")"
-  if [[ -f $bindings ]]; then
-    backup="$bindings.bak-$(date +%Y%m%d-%H%M%S)"
-    cp -- "$bindings" "$backup"
-    did+=("backed up $bindings to $backup")
+# -- bindings: hide/show, swap ---------------------------------------------------
+# Any uncommented bind that sends the signal to a yoru binary counts as
+# present, whatever key it is on, so a toggle or a swap you set up by hand
+# is never duplicated. One backup covers both additions.
+# Whether he had a bindings.lua of his own before we touched it. Asked
+# once, up front: the first add_bind creates the file, and asking after
+# that backs up a file install.sh wrote itself and leaves a pointless .bak
+# in the config of somebody who never had one.
+bindings_existed=; [[ -f $bindings ]] && bindings_existed=yes
+bindings_backed_up=
+add_bind() {                       # add_bind SIGNAL WHAT LINE COMMENT
+  if [[ -f $bindings ]] && grep -Eq "^[^-]*bind\(.*$1.*bin/yoru" "$bindings"; then
+    did+=("$2 binding already in $bindings")
+    return
   fi
-  printf '\n-- Yoru, the Omarchy assistant: hide and show him (added by install.sh)\n%s\n' "$toggle" >>"$bindings"
-  did+=("added to $bindings: $toggle")
-fi
+  mkdir -p "$(dirname -- "$bindings")"
+  if [[ -n $bindings_existed && -z $bindings_backed_up ]]; then
+    bindings_backed_up="$bindings.bak-$(date +%Y%m%d-%H%M%S)"
+    cp -- "$bindings" "$bindings_backed_up"
+    did+=("backed up $bindings to $bindings_backed_up")
+  fi
+  printf '\n-- Yoru, the Omarchy assistant: %s (added by install.sh)\n%s\n' "$4" "$3" >>"$bindings"
+  did+=("added to $bindings: $3")
+}
+add_bind USR1 toggle "$toggle" "hide and show him"
+add_bind USR2 swap "$swap" "swap the character"
 
 # -- report --------------------------------------------------------------------
 printf '%s\n' "${did[@]}"
@@ -89,4 +105,5 @@ else
 fi
 echo "Autostart takes effect at your next login; a config reload does not rerun it."
 echo "Super + Ctrl + Y hides and shows him once Hyprland reloads: hyprctl reload"
+echo "Super + Ctrl + Shift + Y swaps him for The Dane, and back; yoru --sprite dane starts as him"
 echo "Try the knobs first:  yoru --interval 20 --roam 20 --idle 0"

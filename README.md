@@ -1,16 +1,17 @@
 # Yoru — The Omarchy Assistant
 
-> *It looks like you're using a tiling window manager. Would you like help with that?*
+> *It looks like you're using a tiling window manager. Would you like help with
+> that?*
 
 A pixel deer lives in the corner of your screen and quietly teaches you
-Omarchy. He knows 194 things about it, notices which app you're in,
-follows your theme, and — unlike his spiritual ancestor — shuts up when you
-tell him to.
+Omarchy. He knows 194 things about it, notices which app you're in, follows
+your theme, and — unlike his spiritual ancestor — shuts up when you tell him
+to.
 
 He has company. **The Dane — named in honour of Omarchy's creator** — is a
-second character who knows everything the deer knows and says it with the
-same straight face: `yoru --sprite dane`, or `Super + Ctrl + Shift + Y` to
-swap while he's running. See [The Dane](#the-dane).
+second character who knows everything the deer knows and says it with the same
+straight face: `yoru --sprite dane`, or `Super + Ctrl + Shift + Y` to swap
+while he's running. See [The Dane](#the-dane).
 
 <p align="center">
   <img src="docs/yoru-motion.gif" alt="Yoru resting, grazing, speaking and bounding" width="520"><br>
@@ -50,10 +51,82 @@ The one thing the research said to keep: humor. Agents that joked were rated
 
 ---
 
+## What else is out there
+
+Omarchy is not short of ways to learn its keys, and they're good ones.
+[Mighty-Raindeer's cheat sheets][cs1], [funcoder's app shortcuts][cs2],
+[titteerbot's][cs3], [fze-fze's shortcut sheet][cs4] and [acrogenesis'
+printable page][cs5] all put the bindings in front of you. [dbarke's muscle
+memory][mm] stages them — essentials first, power moves later — and ticks off
+what you've learned. [Dan Wahlin's Learn Omarchy][lo] is a full course: sixteen
+lessons, ninety-three activities, and a guide who walks you to the part of the
+desktop being discussed. That this many people built one is the best evidence
+the problem is real.
+
+Every one of them is pull. You have to know you want help, stop what you're
+doing, and press a key — and a sheet can only answer a question you already
+knew to ask, which is no use at all for the thing you'd use daily if you knew
+it existed. Yoru is push. He tells you things while you work, without being
+asked. That's the whole of the difference, and it's why he's a pet and not a
+panel.
+
+Two smaller ones. Five of those seven install into the Omarchy shell; Yoru is a
+standalone app. And he withholds: every tip is checked against your live
+bindings and what `pacman` says is installed, and he stays quiet about anything
+that isn't true on your machine. Muscle memory does the live-binding half of
+that too, and it's the right instinct.
+
+---
+
+## What he says
+
+Six of the 194, as `yoru --list` prints them:
+
+```
+== windows
+  Super + K                          Every keybinding at once. Alt + K for tmux, Ctrl + K for Herdr. Nobody memorizes all of them.
+  Super + W                          Close the window. No confirmation dialog. There was never going to be one.
+  Super + Backspace                  Toggle transparency. Looks incredible, reads terribly. Use sparingly.
+
+== updates
+  pacman -Syu                        Omarchy stops you. You'd skip the snapshot, the migrations and the configs, all at once.
+
+== shell
+  ff                                 fzf with a preview. Fuzzy find any file below you. Faster than remembering where it is.
+  compress [file/dir]                A tar.gz without the flag archaeology. decompress unpacks it.
+```
+
+And now and then, between tips, nothing to do with keybindings:
+
+> Nothing here phones home. I checked. I'm the only one watching, and I'm
+> facing the wall.
+
+---
+
+## Scope
+
+**This is the base build.** Yoru knows stock Omarchy 4 (Quattro) — the desktop,
+the CLI, the coding agents, the shell tools and functions, tmux, Herdr, Foot,
+Neovim/LazyVim, lazygit, lazydocker, btop, Nautilus, browsers, updates and
+snapshots. Everything he says was checked against the installed release under
+`/usr/share/omarchy` — its scripts, its Lua, its menu — not against the manual
+or a search engine. The manual's hotkeys table lists `Super + Q` to close a
+window; it isn't bound. See [`tools/`](tools/README.md) for how the tips are
+verified and how to redo it when a new version lands.
+
+He knows a little of *your* Omarchy. He checks that a binding still exists
+before teaching it, reads your own `bindings.lua` so a key you rebound is
+taught in your words rather than the stock ones, and asks `pacman` what's
+installed, so there are no Ghostty tips on a Foot machine (see [Your
+bindings](#your-bindings)). What he doesn't do yet is in the
+[Roadmap](#roadmap).
+
+---
+
 ## What it reads and runs
 
-Everything `yoru.py` touches on your machine, from the source. Paths are
-under your home unless shown otherwise.
+Everything `yoru.py` touches on your machine, from the source. Paths are under
+your home unless shown otherwise.
 
 **Reads**
 
@@ -84,78 +157,33 @@ under your home unless shown otherwise.
 | `omarchy-theme-color --all`, else `omarchy theme color --all` | start, and whenever the theme files' mtime changes | the palette, through Omarchy's own resolver. Never run under `--no-theme` |
 | `pacman -Qq` | once at start | which packages are installed, so tips about absent software are withheld. `--no-packages` skips it |
 
-Each has a timeout of five seconds or less, and each fails open: if
-`hyprctl` or `pacman` can't be run, nothing is withheld and the palette
-stays built in.
+Each has a timeout of five seconds or less, and each fails open: if `hyprctl`
+or `pacman` can't be run, nothing is withheld and the palette stays built in.
 
-**Loads** — `libgtk4-layer-shell.so` through `ctypes`, before GTK, which
-is how a layer-shell surface has to be set up. GTK itself connects to the
-Wayland display socket, as any window does.
+**Loads** — `libgtk4-layer-shell.so` through `ctypes`, before GTK, which is how
+a layer-shell surface has to be set up. GTK itself connects to the Wayland
+display socket, as any window does.
 
 **Not done**
 
-- No network. Nothing in the file imports a socket, an HTTP client or a
-  URL; there is no update check and nothing is reported anywhere.
+- No network. Nothing in the file imports a socket, an HTTP client or a URL;
+  there is no update check and nothing is reported anywhere.
 - No `sudo`, no root, nothing written outside `~/.config/yoru`.
-- No keyboard. The surface is created with keyboard mode `NONE`; the
-  compositor never delivers a key to him. Hiding him is a Hyprland binding
-  that sends `SIGUSR1` from outside.
-- No clipboard, no screen capture, no reading of other windows' contents —
-  only the focused window's class and title, above.
-- `--debug` writes to stderr only: decisions, tip ids, window *classes*,
-  the theme's name. Not titles.
+- No keyboard. The surface is created with keyboard mode `NONE`; the compositor
+  never delivers a key to him. Hiding him is a Hyprland binding that sends
+  `SIGUSR1` from outside.
+- No clipboard, no screen capture, no reading of other windows' contents — only
+  the focused window's class and title, above.
+- `--debug` writes to stderr only: decisions, tip ids, window *classes*, the
+  theme's name. Not titles.
 
 **At install time**, which is separate from him running: `install.sh` runs
 `pacman -Q` for the four dependencies, copies `yoru.py` to
-`~/.local/bin/yoru`, and appends one line each to
-`~/.config/hypr/autostart.lua` and `~/.config/hypr/bindings.lua`, backing
-each up to `<file>.bak-<timestamp>` first. `uninstall.sh` reverses those
-and asks before removing `~/.config/yoru`. The package puts the binary at
-`/usr/bin/yoru` and prints the two lines instead of writing them.
-
----
-
-## What he says
-
-Six of the 194, as `yoru --list` prints them:
-
-```
-== windows
-  Super + K                          Every keybinding at once. Alt + K for tmux, Ctrl + K for Herdr. Nobody memorizes all of them.
-  Super + W                          Close the window. No confirmation dialog. There was never going to be one.
-  Super + Backspace                  Toggle transparency. Looks incredible, reads terribly. Use sparingly.
-
-== updates
-  pacman -Syu                        Omarchy stops you. You'd skip the snapshot, the migrations and the configs, all at once.
-
-== shell
-  ff                                 fzf with a preview. Fuzzy find any file below you. Faster than remembering where it is.
-  compress [file/dir]                A tar.gz without the flag archaeology. decompress unpacks it.
-```
-
-And now and then, between tips, nothing to do with keybindings:
-
-> Nothing here phones home. I checked. I'm the only one watching, and I'm facing the wall.
-
----
-
-## Scope
-
-**This is the base build.** Yoru knows stock Omarchy 4 (Quattro) — the desktop,
-the CLI, the coding agents, the shell tools and functions, tmux, Herdr, Foot,
-Neovim/LazyVim, lazygit, lazydocker, btop, Nautilus, browsers, updates and
-snapshots. Everything he says was checked against the installed release under
-`/usr/share/omarchy` — its scripts, its Lua, its menu — not against the manual
-or a search engine. The manual's hotkeys table lists `Super + Q` to close a
-window; it isn't bound. See [`tools/`](tools/README.md) for how the tips are
-verified and how to redo it when a new version lands.
-
-He knows a little of *your* Omarchy. He checks that a binding still exists
-before teaching it, reads your own `bindings.lua` so a key you rebound is
-taught in your words rather than the stock ones, and asks `pacman` what's
-installed, so there are no Ghostty tips on a Foot machine (see
-[Your bindings](#your-bindings)). What he doesn't do yet is in the
-[Roadmap](#roadmap).
+`~/.local/bin/yoru`, appends one line to `~/.config/hypr/autostart.lua` and
+two to `~/.config/hypr/bindings.lua`, and backs both files up to
+`<file>.bak-<timestamp>` first. `uninstall.sh` reverses all of that and asks
+before removing `~/.config/yoru`. The package puts the binary at
+`/usr/bin/yoru` and prints the Hyprland lines instead of writing them.
 
 ---
 
@@ -170,12 +198,12 @@ cd yoru
 No sudo. It checks the four dependencies and prints the `pacman` line if any
 are missing, puts `yoru.py` at `~/.local/bin/yoru`, adds one
 `o.launch_on_start` line to `~/.config/hypr/autostart.lua` and two `o.bind`
-lines to `~/.config/hypr/bindings.lua` — `Super + Ctrl + Y` to hide him,
-`Super + Ctrl + Shift + Y` to swap him for The Dane (backing each file up
-first, and only the lines that aren't there already — running it twice is
-safe, and a bind you made by hand for either signal is left alone). Autostart
-takes effect at your next login; until then, `yoru &`. The bindings are live
-after `hyprctl reload`.
+lines to `~/.config/hypr/bindings.lua` — `Super + Ctrl + Y` to hide him, `Super
++ Ctrl + Shift + Y` to swap him for The Dane (backing each file up first, and
+only the lines that aren't there already — running it twice is safe, and a bind
+you made by hand for either signal is left alone). Autostart takes effect at
+your next login; until then, `yoru &`. The bindings are live after `hyprctl
+reload`.
 
 Try the knobs before committing to them:
 
@@ -193,7 +221,7 @@ git pull && ./install.sh
 `yoru --version` says what you have; put it in a bug report.
 
 `./uninstall.sh` reverses it — stops him, removes the binary, the autostart
-line and the binding — and asks before touching `~/.config/yoru`, which is
+line and both bindings — and asks before touching `~/.config/yoru`, which is
 yours: his position, what he has said, what you retired.
 
 ### As a package
@@ -202,14 +230,13 @@ yours: his position, what he has said, what you retired.
 git clone https://github.com/nathankramm/yoru.git && cd yoru && makepkg -si
 ```
 
-The `PKGBUILD` in the repo builds the tagged release from GitHub, checksum
-and all, and installs it through `pacman`. What that buys over `install.sh`:
-he shows up in `pacman -Q`, `pacman -R yoru` removes him, and an upgrade is
-`git pull && makepkg -si` with the old files replaced cleanly. A package
-still can't write the two lines that start him at login and hide him — they
-are your own Hyprland config — so `pacman` prints them at install time, with
-`/usr/bin/yoru` in place of `~/.local/bin/yoru`. They're the ones in the
-by-hand block below.
+The `PKGBUILD` in the repo builds the tagged release from GitHub, checksum and
+all, and installs it through `pacman`. What that buys over `install.sh`: he
+shows up in `pacman -Q`, `pacman -R yoru` removes him, and an upgrade is `git
+pull && makepkg -si` with the old files replaced cleanly. A package can't write
+the Hyprland lines that start him at login and bind his keys — those are your
+own config — so `pacman` prints them at install time with `/usr/bin/yoru` in
+place of `~/.local/bin/yoru`. They're in the by-hand block below.
 
 <details>
 <summary>By hand, if you'd rather see each step</summary>
@@ -226,20 +253,20 @@ spelled out (the launcher runs before your shell has expanded anything):
 o.launch_on_start("/home/you/.local/bin/yoru")
 ```
 
-And two in `~/.config/hypr/bindings.lua`: `Super + Ctrl + Y` to hide and
-show him, `Super + Ctrl + Shift + Y` to swap the character. The pattern is
-the full path with a boundary after it, because `SIGUSR1` and `SIGUSR2` kill
-any process that has no handler for them — a looser pattern could reach an
-editor that happens to have the file open:
+And two in `~/.config/hypr/bindings.lua`: `Super + Ctrl + Y` to hide and show
+him, `Super + Ctrl + Shift + Y` to swap the character. The pattern is the full
+path with a boundary after it, because `SIGUSR1` and `SIGUSR2` kill any process
+that has no handler for them — a looser pattern could reach an editor that
+happens to have the file open:
 
 ```lua
 o.bind("SUPER + CTRL + Y", "Toggle Yoru", "pkill -USR1 -f 'python3 /home/you/.local/bin/yoru( |$)'")
 o.bind("SUPER + CTRL + SHIFT + Y", "Swap Yoru", "pkill -USR2 -f 'python3 /home/you/.local/bin/yoru( |$)'")
 ```
 
-Neither key is bound in Omarchy 4.0.4 (`Super + Shift + Y` is YouTube;
-`Super + Ctrl + Y` and `Super + Ctrl + Shift + Y` are free). Checked against
-the installed release, not the branch.
+Neither key is bound in Omarchy 4.0.4 (`Super + Shift + Y` is YouTube; `Super +
+Ctrl + Y` and `Super + Ctrl + Shift + Y` are free). Checked against the
+installed release, not the branch.
 
 </details>
 
@@ -259,14 +286,14 @@ the installed release, not the branch.
 
 The last two are Hyprland bindings `install.sh` puts in your `bindings.lua`.
 They send `SIGUSR1` and `SIGUSR2` and the process keeps running, so his
-position, snooze state and which tips he's seen all survive either one. The
-swap is a transformation rather than a cut: the deer is The Dane's spirit
-animal, and one dissolves into the other over about half a second, pixel by
-scattered pixel, each on its own grid — so the deer leaves in four-pixel
-blocks and The Dane arrives in two-pixel ones and you watch one density
-become the other. He shuts the laptop first and opens it after, so he
-changes as himself and not mid-typing. The choice is written to
-`state.json` — he comes back as whoever he was. `yoru --swap` sends the
+position, snooze state and which tips he's seen all survive either one.
+
+The swap is a transformation, not a cut. The deer is The Dane's spirit animal,
+and over about half a second one dissolves into the other, a scatter of pixels
+at a time — the deer's coarse, The Dane's fine, because they are drawn at
+different sizes, so you watch one become the other rather than one replace the
+other. He shuts the laptop before he changes and opens it after. The choice
+goes in `state.json`; he comes back as whoever he was. `yoru --swap` sends the
 same signal from a terminal.
 
 From the terminal, no GUI involved:
@@ -281,13 +308,13 @@ yoru --forget-known       # un-retire everything
 
 | Flag | Default | |
 |---|---|---|
-| `--interval` | 900 | average seconds between utterances — tips and remarks alike; remarks take 15–40% of the slots. 300 until the eighteen first-hour tips are done; doubles per pass through the corpus, to at most 4× |
+| `--interval` | 900 | average seconds between utterances, tips and remarks alike — see the cadence note below the table |
 | `--roam` | 180 | average seconds between short walks |
 | `--idle` | 300 | seconds before he assumes you've left (`0` = always on) |
 | `--cooldown` | 90 | minimum quiet before a contextual tip |
 | `--corner` | `br` | `br`, `bl`, `tr`, `tl` — where he parks on first run |
 | `--margin` | 24 | pixels from the side edge on first run. The bottom edge is the ground, so `br`/`bl` stand on it with no gap; `tr`/`tl` keep the gap below the bar, since there's nothing to stand on up there |
-| `--scale` | each character's own | screen pixels per sprite pixel, for every character; the deer's is 4, The Dane's is set per character alongside his canvas |
+| `--scale` | each character's own | screen pixels per sprite pixel — the deer's is 4, The Dane's is 2 |
 | `--topics` | | e.g. `nvim,tmux` — limit him |
 | `--quiet` | | contextual tips only |
 | `--no-context` | | ignore the focused window |
@@ -305,69 +332,67 @@ yoru --forget-known       # un-retire everything
 | `--verify-report` | | list the tips this machine's bindings rule out, and exit |
 | `--debug` | | log every decision to stderr with a timestamp — attach it to a bug report |
 
-Not everything he says is a tip. Some of it is just him, and how much shifts
-over time: a new user gets almost all keybindings — remarks are about 15% of it —
-and the share climbs to roughly 40% once you've worked through the manual. He
-keeps teaching first, and gets more opinionated as the teaching runs out.
-
 He starts fast and slows down. While any of the eighteen first-hour tips is
 unseen he speaks about every five minutes, so a new user has all eighteen
-inside the first sitting — about a hundred minutes. After that it's
-`--interval`, fifteen minutes by default: three tips and a remark an hour,
-and the 194 last a couple of working weeks rather than three days. Each time
-he has been through the whole corpus the gap doubles, to at most four times
-what you asked for — a second hearing is worth less than a first, and he
-should never fall silent. An explicit `--interval` under 300 wins from the
-start; so does `--no-basics`. [`tools/exhaust.py`](tools/exhaust.py) is the
-model these numbers came from.
+inside the first sitting — an hour and a half or so. After that it's
+`--interval`, fifteen minutes by default: three tips and a remark an hour, and
+the 194 last a couple of working weeks rather than three days. Each time he has
+been through the whole corpus the gap doubles, to at most four times what you
+asked for — a second hearing is worth less than a first, and he should never
+fall silent. An explicit `--interval` under 300 wins from the start; so does
+`--no-basics`.
+
+Not all of it is teaching. Remarks are about 15% of what he says to a new user
+and climb to roughly 40% once you've worked through the manual: he teaches
+first and gets more opinionated as the teaching runs out.
+[`tools/exhaust.py`](tools/exhaust.py) is the model these numbers came from.
 
 ---
 
 ## The deer
 
-He parks facing the nearer side edge — into the corner, his back to your
-screen — and turns toward the middle of it only when he has something to say.
-His walks go the other way, into the open, and he turns back when he parks:
-an animal moves facing the open and settles facing its cover. Drag him to the
+He parks facing the nearer side edge — into the corner, his back to your screen
+— and turns toward the middle of it only when he has something to say. His
+walks go the other way, into the open, and he turns back when he parks: an
+animal moves facing the open and settles facing its cover. Drag him to the
 other side and both follow; parked near the middle he keeps whichever way he
-last faced rather than flipping on a nudge. Left alone he drops his head and grazes, his ears twitch,
-and now and then his tail gives the casual side-to-side wag that is a deer's
-all-clear. His walks are a four-beat walk — one foot in the air at a time,
-three on the ground, the body level — because at half a body length a second
-that is what a mammal does; about one in five, he spooks himself and
-bounds instead, and only then does the tail go up, because the flag means
-danger is here and a deer standing calmly doesn't say that. None of it does
-anything. It's just him.
+last faced rather than flipping on a nudge.
+
+Left alone he drops his head and grazes, his ears twitch, and now and then his
+tail gives the casual side-to-side wag that is a deer's all-clear. He walks a
+four-beat walk — one foot in the air at a time, three on the ground, the body
+level — because at half a body length a second that is what a mammal does.
+About one walk in five he spooks himself and bounds instead, and only then does
+the tail go up: the flag means danger is here, and a deer standing calmly
+doesn't say that. None of it does anything. It's just him.
 
 Snoozed, or once you've been away long enough to count as gone, he lies down:
 legs folded under, head pulled back. He blinks, his ears keep going the way a
-bedded deer's do, and he chews — short irregular bouts near a whitetail's real rate,
-longer stills between — because that's what a bedded deer is doing, and it's
-what stops the pose reading as a frozen frame. Bedded a while, he dozes: the eye shuts for
-thirty seconds to a few minutes, the cud stops, then he's awake and chewing
-again, by turns for as long as he's down. The head never drops — deer lie down
-far more than they sleep head-down, and at this size a lowered head read as a
-hole in the animal. The ears keep going asleep or awake; they're never
-lowered. Snoozed, he stays down: you told him to be
-quiet for an hour. Merely away, he still gets up for the odd walk and lies
-back down. He gets up when the hour is over or you come back, and before he
-says or does anything else. Both ways go through one held frame — head back,
-body partway down, legs bent — the same trick as the bound; without it the
-change is a teleport, and it's the moment you're watching, since it's what
-confirms the middle click took. That pose is the
-only visible sign of either state — without it, the one way to check a
-middle click had taken was to middle click again, which undid it. `--still`
-keeps the pose; it's not movement.
+bedded deer's do, and he chews — short irregular bouts near a whitetail's real
+rate, longer stills between. Bedded a while, he dozes: the eye shuts for thirty
+seconds to a few minutes, the cud stops, then he's awake and chewing again, by
+turns for as long as he's down. The head never drops. Deer lie down far more
+often than they sleep head-down, and the ears keep going either way; they're
+never lowered.
+
+Snoozed he stays down, because you told him to be quiet for an hour. Merely
+away, he still gets up for the odd walk and lies back down. He gets up when the
+hour is over or you come back, and before he says or does anything else. Both
+ways go through one held frame — head back, body partway down, legs bent —
+and that frame earns its keep: lying down is the only visible sign of either
+state, so without a moment of transition there is no way to tell a middle
+click landed except to middle click again, which undoes it. `--still` keeps
+the pose. It isn't movement.
 
 He lives on one monitor. A layer surface belongs to a single output, and the
 compositor puts him on whichever one has keyboard focus when he starts;
-`--monitor DP-1` picks one instead, and if that output isn't connected he
-says so on stderr, names what is, and takes the focused one — so the flag is
-safe in `autostart.lua` on a laptop that boots undocked. His saved spot is in
-that monitor's own pixels, so it doesn't carry between outputs of different
-sizes: a corner on a 1080p screen is mid-screen on a scaled laptop panel. If
-the monitor he's on is unplugged, the compositor moves him to another and he
-pulls himself back inside its edges, so he stays visible and draggable.
+`--monitor DP-1` picks one instead, and if that output isn't connected he says
+so on stderr, names what is, and takes the focused one — so the flag is safe in
+`autostart.lua` on a laptop that boots undocked. His saved spot is in that
+monitor's own pixels, so it doesn't carry between outputs of different sizes: a
+corner on a 1080p screen is mid-screen on a scaled laptop panel. If the monitor
+he's on is unplugged, the compositor moves him to another and he pulls himself
+back inside its edges, so he stays visible and draggable.
 
 He is cheap to keep. A frame is drawn only when something in it changed — a
 blink, an ear, a step — so a parked deer redraws a few dozen times a minute,
@@ -381,77 +406,64 @@ back — the window you came back to still gets its tip.
 
 ## The Dane
 
-**The Dane — named in honour of Omarchy's creator.** A 48×48 man in a plain
-tee with a letter O on the chest in the theme's accent, long wavy hair to
-the collar, a beard. He is played exactly the way the deer is: the humour
-is in the dry lines and never in the movement, and he does ordinary things
-with total seriousness. Nothing goofy.
+A man in a plain tee with a letter O on the chest in the theme's accent, long
+wavy hair to the collar, a beard. He is played the way the deer is: the humour
+is in the lines and never in the movement. His scene is 56×48 pixels against
+the deer's 24×24, drawn half the size, so the two stand the same height on your
+screen.
 
 <p align="center">
   <img src="docs/dane-motion.gif" alt="The Dane working, taking his coffee, closing the laptop to speak, and putting his head down" width="460"><br>
   <sub>Twenty-five seconds of his day, drawn by the code that draws him. Smaller and sharper as <a href="docs/dane-motion.mp4">MP4</a>.</sub>
 </p>
 
-He lives at a desk, facing you. A tabletop on two slim legs, him seated
-behind it with his legs showing beneath, a laptop open on the desk facing
-him — so what you see is the back of the lid — and a mug beside it. He
-works, and while he works the only thing that moves is his blink: his
-hands are behind the lid, where a keyboard is, and stillness at a desk
-reads as concentration. He doesn't roam: wandering out and back is
-grazing behaviour, right for an animal, and a man doing it reads as
-pacing. The deer still roams; whether a character does is his own data.
-Dragging moves the whole scene; it doesn't mirror.
+He lives at a desk, facing you. A tabletop on two slim legs, him seated behind
+it with his legs showing beneath, a laptop open on the desk facing him — so
+what you see is the back of the lid — and a mug beside it. He works, and while
+he works the only thing that moves is his blink: his hands are behind the lid,
+where a keyboard is, and stillness at a desk reads as concentration. He doesn't
+roam: wandering out and back is grazing behaviour, right for an animal, and a
+man doing it reads as pacing. The deer still roams. Dragging moves the whole
+scene, and unlike the deer he never faces the other way — the desk is pointed
+at you.
 
-Twice in a long while he stops. Every few minutes he takes his coffee —
-his hand out to the mug, the mug up off the desk, and a sip, three held
-frames out and the same three back, and the mug goes back down even if
-you interrupt him. Perhaps a quarter as often he strokes his beard for a
-second, a hand up to his jaw and back behind the laptop. That is the
-whole of it. They are the deer's graze, and like the graze they are what
-keeps a still drawing from reading as a crashed one — but they are far
-rarer than his, because a man at a desk who fidgets every twenty seconds
-isn't working, he's a screensaver.
+Twice in a long while he stops. Every few minutes he takes his coffee: a hand
+out to the mug, the mug up off the desk, two more frames on the way, and a sip
+— then all four again in reverse, and the mug goes back on the desk even if you
+interrupt him halfway. Perhaps a quarter as often he strokes his beard for a
+second, a hand up to his jaw and back behind the laptop. That's everything he
+does. They're his version of the deer's graze, and they keep a still drawing
+from reading as a crashed one, but they come minutes apart rather than seconds:
+a man at his desk who stayed perfectly still would look broken, and one who
+fidgeted would look like he had nothing to do.
 
-The turn-away is in his eyes. The research is about an agent that
-appears to watch you, and gaze is what signals watching: while he works
-his eyes are down, on the laptop, so he isn't watching you — through the
-coffee and the beard stroke too. Speaking, he closes the laptop: the lid
-folds down toward him over two held frames, seven rows of screen to five
-to three to one, so it reads as a lid coming down and not as a cut. Then
-he looks up at you, and speaks. Closing the laptop is the point: he stops
-what he is doing to address you. When the bubble clears he opens it
-again, a frame at a time, and his eyes go back down. Snoozed, or once
-you've been away, the same fold happens and *then* his head goes down on
-folded arms, through a held frame of its own — the laptop is always shut
-before he sleeps on it, and before he turns into a deer. The props take the theme through the same tones
-as his clothes.
+The turn-away is in his eyes. The research is about an agent that appears to
+watch you, and gaze is what signals watching: while he works his eyes are down
+on the laptop, through the coffee and the beard stroke too, so he isn't
+watching you. Speaking, he closes the laptop — the lid folds toward him a frame
+at a time, so it reads as a lid coming down rather than a cut — looks up, and
+says his piece. Closing it is the point: he stops what he is doing to address
+you. When the bubble clears he opens it again and his eyes go back down.
+Snoozed, or once you've been away, the same fold happens and *then* his head
+goes down on his folded arms. The laptop is always shut before he sleeps on it,
+and before he turns into a deer.
 
 <p align="center">
   <img src="docs/dane-front-2x.png" alt="The Dane working, sipping, stroking his beard, speaking, settling and asleep, on Tokyo Night and Catppuccin Latte" width="904"><br>
-  <sub>Every state he has, at the size he ships at, on a dark theme and a light one.</sub>
+  <sub>Working, mid-sip, mid-thought, speaking, going down and asleep — at the size he ships at, on a dark theme and a light one.</sub>
 </p>
 
-Everything that isn't the drawing is the same code. He says the same 194
-things, notices the same apps, keeps the same cadence, turns away from you
-the same way, and answers the same clicks. His skin, hair and beard are
-natural colours and stay put; the shirt, trousers, shoes and the O are the
-theme's, through the very tones the deer's coat, antlers and hooves are
-made of, so the two recolour together. On a theme whose background is
-close to his hair or his skin, that colour moves the one shade it needs to
-keep its edge — nine of the twenty-two shipped themes, and the audit names
-them.
+Only the drawing is new. He knows the same 194 things, notices the same apps,
+keeps the same cadence and answers the same clicks. His skin, hair and beard
+are fixed natural colours; his shirt, trousers, shoes and the O are the
+theme's, through the same tones the deer's coat and antlers are made of, so the
+two of them recolour together. On nine of the twenty-two shipped themes the
+background sits close enough to his hair or his skin to swallow the edge, and
+that colour moves one shade to keep it.
 
-Start as him with `yoru --sprite dane`; swap while running with
-`Super + Ctrl + Shift + Y` (or `yoru --swap`). The choice is remembered.
-The deer stays the default.
-
-A third character would be its maps, a palette of roles and a pose table,
-with a canvas size, a pixel scale, a list of idle actions and a settle
-frame of its own — the Pet reads all of it from the character and nothing
-else, and the sprite checks in `tools/audit.py` run from the same data.
-An idle action is a held pose, a path of frames into it, how often it
-comes and how long it lasts; the deer's graze is a path of one frame,
-The Dane's coffee is four.
+Start as him with `yoru --sprite dane`; swap while running with `Super + Ctrl +
+Shift + Y` (or `yoru --swap`). The choice is remembered. The deer stays the
+default.
 
 ---
 
@@ -485,28 +497,27 @@ had, is withheld, so he never teaches you a binding you've rebound away.
 
 Only tips in Hyprland topics are checked. tmux, Neovim, Ghostty, lazygit and
 shell keys look the same but belong to their own programs and are left alone,
-as are your own tips. So are the Chromium extension bindings (`Alt + Shift + L`,
-`Alt + Shift + D`): they never appear in `hyprctl binds`, so they're filed as
-browser tips rather than compositor ones and aren't checked against it. If
+as are your own tips. So are the Chromium extension bindings (`Alt + Shift +
+L`, `Alt + Shift + D`): they never appear in `hyprctl binds`, so they're filed
+as browser tips rather than compositor ones and aren't checked against it. If
 `hyprctl` is missing or its output can't be read, nothing is withheld.
 
-Your own `~/.config/hypr/bindings.lua` is read too. Every `o.bind` in it with
-a description becomes a tip in your words (topic `yours`, at most 25, never
+Your own `~/.config/hypr/bindings.lua` is read too. Every `o.bind` in it with a
+description becomes a tip in your words (topic `yours`, at most 25, never
 checked against the compositor — it came from the config). A key in that file
 is one you rebound, so if a curated tip has it as its headline, your tip
 replaces it: `Super + S` stops being "the scratchpad" and becomes whatever you
-called it. The existence check above couldn't catch that on its own —
-`Super + S` was still bound, just to something else — and no table of stock
-descriptions was needed to fix it. `--no-own` turns this off.
+called it. The existence check above can't catch that on its own: `Super + S`
+is still bound, just to something else. `--no-own` turns this off.
 
 What isn't installed is withheld too. One `pacman -Qq` at startup drops the
-tips that are useless without a package that isn't there: no Ghostty tips on
-a Foot machine, no 1Password tip without 1Password. Twenty tips over thirteen
+tips that are useless without a package that isn't there: no Ghostty tips on a
+Foot machine, no 1Password tip without 1Password. Twenty tips over thirteen
 packages; `--no-packages` turns it off.
 
-`yoru --verify-report` prints exactly what he's holding back and why.
-`--list` and `--ask` still show everything — suppression only applies to what
-he volunteers.
+`yoru --verify-report` prints exactly what he's holding back and why. `--list`
+and `--ask` still show everything — suppression only applies to what he
+volunteers.
 
 ---
 
@@ -547,12 +558,12 @@ The next versions are about making him yours rather than generic.
 
 - **Weight by what you actually use.** He already watches window focus; over
   weeks that's a real usage model, not uniform random.
-- **Generate tips from your own configs** — `bindings.lua` is done (see
-  [Your bindings](#your-bindings)); aliases in `~/.bashrc` and your
-  scratchpad scripts are not.
-- **A position that survives docking.** Corner plus offset, or fractions of
-  the surface? Deciding needs a few weeks of actually docking, and either
-  changes what `state.json` means for existing users.
+- **Generate tips from your own configs** — `bindings.lua` is done (see [Your
+  bindings](#your-bindings)); aliases in `~/.bashrc` and your scratchpad
+  scripts are not.
+- **A position that survives docking.** Corner plus offset, or fractions of the
+  surface? Deciding needs a few weeks of actually docking, and either changes
+  what `state.json` means for existing users.
 
 **A line this project won't cross.** Personalization here means reading files
 you wrote and noticing which window has focus. It will never mean watching
@@ -576,8 +587,10 @@ precisely the predatory quality that made Clippy hated.
 
 ## Credits
 
-- [Omarchy][omarchy] by DHH and contributors — every tip is traced to its shipped files
-- Omarchy's creator, for the operating system that made Yoru worth building — The Dane is named in his honour
+- [Omarchy][omarchy] by DHH and contributors — every tip is traced to its
+  shipped files
+- Omarchy's creator, for the operating system that made Yoru worth building —
+  The Dane is named in his honour
 - Luke Swartz, [*Why People Hate the Paperclip*][swartz], Stanford, 2003
 - [gtk4-layer-shell][gls] by William Wold
 - Clippit, designed by Kevan Atteberry, 1997
@@ -589,6 +602,13 @@ Built with [Claude][claude].
 MIT. Take it and run.
 
 [swartz]: https://xenon.stanford.edu/~lswartz/paperclip/paperclip.pdf
+[cs1]: https://github.com/Mighty-Raindeer/Omarchy-CheatSheetExpansion
+[cs2]: https://github.com/funcoder/omarchy-app-shortcuts
+[cs3]: https://github.com/titteerbot/omarchy-cheatsheet
+[cs4]: https://github.com/fze-fze/omarchy-shortcut-sheet
+[cs5]: https://github.com/acrogenesis/omarchy-cheat-sheet
+[mm]: https://github.com/dbarke/omarchy-muscle-memory
+[lo]: https://github.com/DanWahlin/learn-omarchy
 [omarchy]: https://github.com/omacom/omarchy
 [gls]: https://github.com/wmww/gtk4-layer-shell
 [claude]: https://claude.ai

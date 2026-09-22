@@ -1,15 +1,34 @@
 post_install() {
   cat <<'MSG'
-Yoru is at /usr/bin/yoru. Starting him at login and the key that hides him
-are your Hyprland config, which a package does not write. Two lines:
+Yoru is at /usr/bin/yoru. Starting him at login, the key that hides him and
+the key that swaps the character are your Hyprland config, which a package
+does not write. Three lines:
 
   ~/.config/hypr/autostart.lua
     o.launch_on_start("/usr/bin/yoru")
 
   ~/.config/hypr/bindings.lua
     o.bind("SUPER + CTRL + Y", "Toggle Yoru", "pkill -USR1 -f 'python3 /usr/bin/yoru( |$)'")
+    o.bind("SUPER + CTRL + SHIFT + Y", "Swap Yoru", "pkill -USR2 -f 'python3 /usr/bin/yoru( |$)'")
 
 Autostart takes effect at your next login; until then:  yoru &
 Try the knobs first:  yoru --interval 20 --roam 20 --idle 0
 MSG
+}
+
+# Super + Ctrl + Shift + Y arrived in 1.1.0, and post_install does not run on
+# an upgrade -- so anyone who installed before it would never be told the key
+# exists, which for a keybinding is the same as it not existing. Told once, to
+# the people it is new to.
+post_upgrade() {
+  if [ -n "$2" ] && [ "$(vercmp "$2" 1.1.0)" -lt 0 ]; then
+    cat <<'MSG'
+New in 1.1.0: a second character, and a key to swap him in. One more line in
+~/.config/hypr/bindings.lua, then hyprctl reload:
+
+    o.bind("SUPER + CTRL + SHIFT + Y", "Swap Yoru", "pkill -USR2 -f 'python3 /usr/bin/yoru( |$)'")
+
+Or start as him with:  yoru --sprite dane
+MSG
+  fi
 }

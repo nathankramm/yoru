@@ -12,9 +12,10 @@ install=yoru.install
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('31d25338666c41e28e19fddbd334128ba5d30fae2269173945cb718c57e28a53')
 
-# The binary only. Starting him at login and the Super + Ctrl + Y toggle are
-# lines in the user's own ~/.config/hypr, which a package must not write;
-# yoru.install prints them, and the README's by-hand section has them.
+# The binary only. Starting him at login, the Super + Ctrl + Y toggle and the
+# Super + Ctrl + Shift + Y swap are lines in the user's own ~/.config/hypr,
+# which a package must not write; yoru.install prints them, and the README's
+# by-hand section has them.
 package() {
   cd "$pkgname-$pkgver"
   install -Dm755 yoru.py "$pkgdir/usr/bin/yoru"

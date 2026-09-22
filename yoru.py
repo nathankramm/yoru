@@ -825,6 +825,12 @@ DANE_TURN = DANE_VIEWS
 # frames of the fold ran past in six tenths of a second and read as one
 # blurred move.
 TURN_SECS = 0.20
+# One held frame of an idle action's path in or out (see Idle). Long
+# enough that the frame registers as a position and not as a smear, short
+# enough that the hand is not wading: at 0.10 the mug arrived without
+# ever having been anywhere, and at 0.25 he looked like he was thinking
+# about it.
+IDLE_STEP = 0.18
 # Where the map lands in the scene: (dx, dy), and the last map row drawn
 # for the body -- the desk covers the rest, and the legs are drawn from
 # rows 42-47 of the map where they land.
@@ -876,6 +882,92 @@ SEATED_KNEES = [((36, 38, 22, 25), "F"), ((36, 38, 28, 32), "P")]
 # rest of each band.
 FOREARMS = [([(30, 35, 36), (31, 34, 35), (32, 33, 34)], "K"),
             ([(30, 20, 21), (31, 21, 22), (32, 21, 22)], "k")]
+# The idle actions. Everything below moves the near forearm and nothing
+# else: the far arm, the head, the eyes, the lid and the mug's own place
+# on the desk are where they were. He is still working, so his eyes stay
+# down through all of it.
+#
+# Coffee. His graze: the thing he does when nothing is happening, and the
+# only reason the scene has a mug. Three held frames in and the same
+# three back out -- the hand out of hiding and onto the mug, the mug up
+# off the desk, twice more on the way up, the mug at his mouth -- because
+# the mug crosses two thirds of the canvas and a mug that arrives at a
+# face in one frame is a teleport, and because putting it back matters as
+# much as lifting it: an interrupted sip reverses along the path rather
+# than blinking the mug home (see Idle). Three positions were tried
+# first and the mug moved eight pixels a frame, which at 2x is sixteen
+# on screen: it read as three places the mug had been, not as a mug
+# going up. Four makes each hop about five, and it travels.
+#
+# The mug is not redrawn, it is carried: (dy, dx) from where it stands,
+# so its body, its handle and the row of coffee move as one thing and
+# cannot drift apart. The hand is drawn after it and the forearm before
+# the laptop, which is what puts the hand in front of the mug and the
+# elbow behind the lid with no clipping code -- below row 26 and left of
+# x 34 the lid simply covers the arm, the same way it covers his hands
+# while he types.
+#
+# At the sip the mug sits over his mouth and the near half of his beard.
+# It was drawn off to the side first, at his cheek, to keep the face
+# clear: that read as a man holding a mug up beside his head, not
+# drinking from it. A mug at the mouth covers the mouth; that is what
+# the gesture is. Nothing of it is the accent -- the body is the belly
+# tone, the coffee the far tone -- so the rule about his face holds.
+COFFEE_PATH = ("reach", "lift", "carry", "sip")
+# The beard stroke. The thinking gesture, and rarer than the coffee by
+# about four to one: it is punctuation, and a man who strokes his beard
+# every couple of minutes is not thinking, he is twitching. Two frames,
+# since the hand travels half as far as the mug does and has nothing to
+# carry.
+BEARD_PATH = ("raise", "beard")
+# (dy, dx) the mug is carried in each held frame. At the reach it has not
+# left the desk yet; what has moved is the arm.
+# The hops are even in height and near enough in width, and each one is
+# placed so the mug's edge never lands beside a pixel of its own tone:
+# the mug is the belly tone and so is the highlight down his side, and at
+# (-3, -4) the two touched and became one pale shape with the laptop in
+# it. Same rule as the deer's legs, same reason.
+MUG_CARRY = {"reach": (0, 0), "lift": (-3, -3), "carry": (-6, -8), "sip": (-9, -13)}
+# Tipped to his mouth, so the surface of the coffee is not what you see.
+MUG_TIPPED = ("sip",)
+# The hand, in the mug's own coordinates, so it is carried exactly as the
+# handle is and grips the same part of the mug in every frame. It is the
+# handle it has hold of -- the handle faces his side of the desk, which is
+# the side the arm comes from -- and a hand on a handle covers it.
+MUG_HAND = [(29, 44, 46), (30, 44, 46), (31, 44, 46)]
+# The near forearm, by pose: the part behind the lid is drawn anyway and
+# covered, so each band is the whole arm from the elbow out.
+# The near forearm, by pose, elbow end first. The part behind the lid is
+# drawn anyway and covered -- and so is the part behind the mug, which is
+# what puts the forearm at the mug and the hand on the far side of it.
+IDLE_ARM = {
+    "reach": [(30, 35, 40), (31, 36, 41)],
+    "lift":  [(30, 35, 38), (31, 34, 37), (32, 34, 35)],
+    "carry": [(28, 34, 36), (29, 34, 36), (30, 34, 35), (31, 34, 35),
+              (32, 34, 35)],
+    "sip":   [(23, 32, 34), (24, 32, 34), (25, 32, 35), (26, 33, 35),
+              (27, 33, 35), (28, 34, 35), (29, 34, 35), (30, 34, 35),
+              (31, 34, 35), (32, 34, 35)],
+    "raise": [(26, 33, 35), (27, 33, 35), (28, 34, 35), (29, 34, 35),
+              (30, 34, 35), (31, 34, 35), (32, 34, 35)],
+    "beard": [(23, 32, 34), (24, 31, 34), (25, 32, 35), (26, 33, 35),
+              (27, 33, 35), (28, 34, 35), (29, 34, 35), (30, 34, 35),
+              (31, 34, 35), (32, 34, 35)],
+}
+# The hand on the frames that have no mug in it: the beard stroke, where
+# it is simply the end of the arm.
+#
+# It sits at the jaw, not on the front of the chin, and that is the whole
+# of what makes the gesture legible. A hand is skin and so is a face:
+# drawn across the chin it touched the skin of his lower face along four
+# pixels and the two became one shape -- a man with half a beard, not a
+# man with a hand on it. At the jaw it is bounded by the beard on one
+# side and the hair on the other, both of them browns, and it reads as a
+# hand. Dropped to the throat instead it read as a hand at his collar.
+IDLE_HAND = {
+    "raise": [(24, 32, 34), (25, 32, 34)],
+    "beard": [(20, 31, 34), (21, 31, 34), (22, 31, 34)],
+}
 # Head down on folded arms, for snooze and away: the laptop closed, the
 # arms crossed on the desk in front of it, the head on the arms -- the
 # top of it to you, a little forehead showing under the fringe. Nothing
@@ -950,23 +1042,40 @@ def _dane_legs(out, pal):
                 out.append((x + dx, y, pal[ch]))
 
 
-def _dane_desk(out, pal, lid):
+def _dane_desk(out, pal, lid, pose="stand"):
     _rect(out, *DESK_TOP, pal["P"])
     for leg in DESK_LEGS:
         _rect(out, *leg, pal["F"])
+    # The mug goes on before the laptop does, so the laptop covers it where
+    # the two meet -- carried up past the lid it passes behind it, the
+    # same way his chest does. Drawn after, four pixels of mug sat on the
+    # lid's top corner and the mug was in front of a screen it is behind.
+    dy, dx = MUG_CARRY.get(pose, (0, 0))
+    my0, my1, mx0, mx1 = MUG
+    _rect(out, my0 + dy, my1 + dy, mx0 + dx, mx1 + dx, pal["s"])
+    for y, x0, x1 in MUG_HANDLE:
+        _rect(out, y + dy, y + dy, x0 + dx, x1 + dx, pal["s"])
+    if pose not in MUG_TIPPED:
+        _rect(out, MUG_COFFEE[0] + dy, MUG_COFFEE[0] + dy,
+              MUG_COFFEE[1] + dx, MUG_COFFEE[2] + dx, pal["F"])
+    for y, x0, x1 in (MUG_HAND if pose in MUG_CARRY else ()):
+        _rect(out, y + dy, y + dy, x0 + dx, x1 + dx, pal["K"])   # holding it, not behind it
+    for y, x0, x1 in IDLE_HAND.get(pose, ()):
+        _rect(out, y, y, x0, x1, pal["K"])
     _rect(out, *LAPTOP_BASE, pal["F"])
     y0, y1, x0, x1 = LAPTOP_LID[lid]
     _rect(out, y0, y1, x0, x1, pal["F"])                # the rim...
     if y1 - y0 >= 2:
         _rect(out, y0 + 1, y1, x0 + 1, x1 - 1, pal["B"])   # ...around the lid's back
-    _rect(out, *MUG, pal["s"])
-    for y, x0, x1 in MUG_HANDLE:
-        _rect(out, y, y, x0, x1, pal["s"])
-    _rect(out, MUG_COFFEE[0], MUG_COFFEE[0], MUG_COFFEE[1], MUG_COFFEE[2], pal["F"])
 
 
-def _dane_arms(out, pal):
+def _dane_arms(out, pal, pose="stand"):
+    """Both forearms. The far one never moves; the near one is at the keys
+    unless an idle action has it somewhere else."""
+    near = IDLE_ARM.get(pose)
     for band, role in FOREARMS:
+        if near is not None and role == "K":
+            band = near
         for y, x0, x1 in band:
             _rect(out, y, y, x0, x1, pal[role])
 
@@ -1009,10 +1118,34 @@ def dane_pixels(frame, blink, pose="stand", ear=0, tail=0, gait=None, chew=0, do
         _dane_head_down(out, pal, blink, pose == "settle")
     else:
         _dane_man(out, pal, "up" if view == "speak" else "down", blink, doze)
-        _dane_arms(out, pal)
+        _dane_arms(out, pal, pose)
     _dane_legs(out, pal)
-    _dane_desk(out, pal, lid)
+    _dane_desk(out, pal, lid, pose)
     return out
+
+
+class Idle:
+    """One idle action: the pose he holds, the path of held frames he goes
+    into it and comes back out through -- IDLE_STEP each, the last of them
+    the held pose itself -- how often it comes and how long he holds it.
+
+    The deer's graze is one frame: his head is down or it is up, and the
+    Pet has always flipped straight to it. The Dane's coffee is three --
+    the hand out to the mug, the mug up off the desk, the mug at his
+    mouth -- because a mug that arrives at a face in one frame is a
+    teleport, and the same going back. A path of one keeps the deer's old
+    behaviour exactly.
+
+    Each action carries its own clock, which is the whole of what makes
+    one rarer than another: The Dane's beard stroke comes about a
+    quarter as often as his coffee, and both are far rarer than the
+    deer's graze. He works; stillness at work reads as focus, and an
+    office worker who fidgets every twenty seconds reads as a screensaver."""
+
+    def __init__(self, pose, every, secs, path=None):
+        self.pose = pose
+        self.path = tuple(path or (pose,))
+        self.every, self.secs = every, secs
 
 
 class Character:
@@ -1026,31 +1159,36 @@ class Character:
     tall is 0.48-0.75); the deer's tics it uses ("tic" is a character's
     own idle motion, driven by the Pet at `tic_every`); its views and the
     path the Pet walks between them to speak, one TURN_SECS a step; and
-    the cadence of its idle pose -- the deer's graze, The Dane's coffee --
-    as seconds between and seconds of."""
+    its idle actions -- the deer's graze, The Dane's coffee and beard
+    stroke -- as Idles, each with a cadence and a path of its own."""
 
     def __init__(self, name, label, pixels, size, scale, gaits, walk_step, pace,
                  roams=True, mirrors=True, tics=(), tic_every=(0.25, 0.5), views=(),
-                 turn=(), idle_every=(25, 70), idle_for=(4, 11)):
+                 turn=(), idles=()):
         self.name, self.label, self.pixels = name, label, pixels
         self.w, self.h, self.scale = size[0], size[1], scale
         self.roams, self.mirrors = roams, mirrors
         self.gaits, self.walk_step, self.pace = gaits, walk_step, pace
         self.tics, self.tic_every, self.views, self.turn = tics, tic_every, views, turn
-        self.idle_every, self.idle_for = idle_every, idle_for
+        self.idles = idles
 
 
 SPRITES = {
     "yoru": Character("yoru", "Yoru", pixels, (SW, SH), 4, ("walk", "bound"),
-                      WALK_STEP, (46 / 96, 72 / 96), tics=("ear", "tail", "chew")),
+                      WALK_STEP, (46 / 96, 72 / 96), tics=("ear", "tail", "chew"),
+                      idles=(Idle("graze", every=(25, 70), secs=(4, 11)),)),
     # He does not roam and does not mirror: a man at a desk has nowhere
     # to walk to, and the desk faces you (see the scene). No tic: working,
-    # his only motion is the blink. Coffee, his idle pose, comes every few
-    # minutes and lasts a few seconds.
+    # his only motion is the blink, and his two idle actions are minutes
+    # apart (see COFFEE and BEARD for what each is and why it is as rare
+    # as it is).
     "dane": Character("dane", "The Dane", dane_pixels, (56, 48), 2, (),
                       WALK_STEP, (46 / 96, 72 / 96), roams=False, mirrors=False,
                       views=DANE_VIEWS, turn=DANE_TURN,
-                      idle_every=(150, 400), idle_for=(3, 5)),
+                      idles=(Idle("sip", every=(150, 400), secs=(1.8, 2.8),
+                                  path=COFFEE_PATH),
+                             Idle("beard", every=(700, 1600), secs=(1.0, 1.6),
+                                  path=BEARD_PATH))),
 }
 DEFAULT_SPRITE = "yoru"
 
@@ -1829,8 +1967,15 @@ class Pet:
         self.next_blink = random.uniform(2, 6)
         # Idle tics. A deer standing still is never quite still.
         self.pose = "stand"
-        self.next_graze = random.uniform(*self.character.idle_every)
-        self.graze_for = 0.0
+        # The idle actions (see Idle): the one running, how far along its
+        # path he is, what that frame has left, what the held pose has
+        # left, and one clock per action -- which is what lets The Dane's
+        # beard stroke be rarer than his coffee.
+        self.idle = None
+        self.idle_step = -1
+        self.idle_hold = 0.0
+        self.idle_for = 0.0
+        self.next_idle = self.fresh_idles()
         # The frame between standing and lying: where it is going, how
         # long it has left, and whether something (a walk) needs him up
         # regardless of the snooze that would keep him down.
@@ -1886,6 +2031,30 @@ class Pet:
     def h(self):
         return self.character.h * self.px
 
+    # -- idle actions ------------------------------------------------------
+    def fresh_idles(self):
+        """A clock per idle action the character has, started at a random
+        point in its own range so two actions never come due together on
+        the first pass."""
+        return [random.uniform(*a.every) for a in self.character.idles]
+
+    def idling(self):
+        return self.idle is not None
+
+    def drop_idle(self):
+        """Ask whatever idle action is running to come back out. One held
+        frame deep -- the deer's graze, always -- it is simply over, which
+        is what the graze has always done when he has something to say;
+        deeper in, step() walks him back out along the path a frame at a
+        time, so the mug goes back on the desk rather than vanishing."""
+        if self.idle is None:
+            return
+        self.idle_for = 0.0
+        if self.idle_step <= 0:
+            self.idle, self.idle_step, self.idle_hold = None, -1, 0.0
+            if self.pose not in ("rest", "settle"):
+                self.pose = "stand"
+
     # -- the swap ---------------------------------------------------------
     def request_swap(self, name=None):
         """Ask for the next character (or `name`). Taken in step(), through
@@ -1908,6 +2077,10 @@ class Pet:
         self.swap_to = None
         self.view = self.character.turn[0] if self.character.turn else "side"
         self.turn_for = 0.0
+        # A deer's graze is not a man's coffee: the clocks start again on
+        # the character he has become, and nothing is mid-path.
+        self.idle, self.idle_step, self.idle_hold, self.idle_for = None, -1, 0.0, 0.0
+        self.next_idle = self.fresh_idles()
         dh = was_h - self.h                 # canvas and scale may both differ
         self.y += dh
         if self.home_y is not None:
@@ -2080,9 +2253,9 @@ class Pet:
         # Head up before he says anything. Off the ground too, but that
         # goes through the settle frame in step(): text is set here, and
         # a deer with something to say is never one who wants to lie down.
-        if self.pose == "graze":
-            self.pose = "stand"
-        self.graze_for = 0.0
+        # Mid-coffee he puts the mug down first, one frame at a time,
+        # because step() sees the text and reverses the path.
+        self.drop_idle()
         self.head, self.text = head, text
         self.text_until = now + secs
         self.last_spoke = now
@@ -2140,7 +2313,8 @@ class Pet:
         # click 100ms after the first) and it simply lands on the new one.
         want = "rest" if ((self.snoozing(now) or not self.present(now))
                           and self.mode == "home" and not self.text
-                          and self.pause <= 0 and not self.rouse) else "stand"
+                          and self.pause <= 0 and not self.rouse
+                          and self.idle is None) else "stand"
         if self.pose == "settle":
             self.settle_to = want
             self.settle_for -= dt
@@ -2153,10 +2327,10 @@ class Pet:
             # then the character he becomes, standing or sitting as the
             # moment wants. Mid-walk it waits for him to arrive.
             self.pose, self.settle_to, self.settle_for = "settle", want, SETTLE_SECS
-            self.graze_for = 0.0
+            self.drop_idle()
         elif want == "rest" and self.pose != "rest":
             self.pose, self.settle_to, self.settle_for = "settle", "rest", SETTLE_SECS
-            self.graze_for = 0.0
+            self.drop_idle()
         elif want == "stand" and self.pose == "rest":
             self.pose, self.settle_to, self.settle_for = "settle", "stand", SETTLE_SECS
         if self.pose == "stand":
@@ -2225,28 +2399,52 @@ class Pet:
             self.tail = WAG_SECS
             self.next_tail = random.uniform(9, 25) * (2 if resting else 1)
 
-        # He only puts his head down when he's settled, parked and quiet --
-        # never mid-sentence, and never while walking somewhere.
-        if self.graze_for > 0:
-            self.graze_for -= dt
-            if self.graze_for <= 0 or self.text or self.mode != "home":
-                self.graze_for = 0.0
-                self.pose = "stand"
-        elif (self.mode == "home" and not self.text and self.pause <= 0
-              and not self.still and self.pose == "stand"):
-            self.next_graze -= dt
-            if self.next_graze <= 0:
-                self.pose = "graze"
-                self.graze_for = random.uniform(*self.character.idle_for)
-                self.next_graze = random.uniform(*self.character.idle_every)
+        # The idle actions. He only starts one settled, parked and quiet --
+        # never mid-sentence, never while walking somewhere, never once
+        # he's been told to hush or the chair is empty. Each action has
+        # its own clock, and only one runs at a time; an action that comes
+        # due while another is out simply waits for its next turn rather
+        # than queueing, so two of them can never stack up into a routine.
+        #
+        # Getting in and out is a path of held frames, IDLE_STEP each (see
+        # Idle). Anything that wants him back reverses it from wherever he
+        # is -- it does not cut -- which is the whole reason the mug ever
+        # gets put down. A one-frame path, which is all the deer's graze
+        # is, goes in and comes out in the frame it is asked to, exactly
+        # as the graze always did.
+        if self.pose not in ("rest", "settle"):
+            free = (self.mode == "home" and not self.text and self.pause <= 0
+                    and not self.still and not self.snoozing(now) and self.present(now))
+            if self.idle is None and free:
+                for i, act in enumerate(self.character.idles):
+                    self.next_idle[i] -= dt
+                    if self.next_idle[i] <= 0:
+                        self.next_idle[i] = random.uniform(*act.every)
+                        if self.idle is None:
+                            self.idle, self.idle_step, self.idle_hold = act, -1, 0.0
+                            self.idle_for = random.uniform(*act.secs)
+            if self.idle is not None:
+                top = len(self.idle.path) - 1
+                if self.idle_step == top and free:
+                    self.idle_for -= dt
+                want_step = top if (free and self.idle_for > 0) else -1
+                self.idle_hold -= dt
+                if self.idle_step != want_step and self.idle_hold <= 0:
+                    self.idle_step += 1 if want_step > self.idle_step else -1
+                    # The held frame is timed by the action, the rest of
+                    # the path by IDLE_STEP.
+                    self.idle_hold = 0.0 if self.idle_step == top else IDLE_STEP
+                self.pose = self.idle.path[self.idle_step] if self.idle_step >= 0 else "stand"
+                if self.idle_step < 0:
+                    self.idle = None
 
         if self.text and now > self.text_until:
             self.head = self.text = None
 
         # The turn. A character with views faces the viewer to speak and
         # turns back when the bubble clears, one step along its turn path
-        # per TURN_SECS -- The Dane closes the laptop, then the quarter
-        # frame, then front, and the same path back. A character without views is
+        # per TURN_SECS -- The Dane folds the laptop down over two frames,
+        # then front, and the same path back. A character without views is
         # drawn from the side whatever this says. A want that flips
         # mid-turn simply reverses along the path from wherever he is.
         #
@@ -2315,9 +2513,7 @@ class Pet:
                     # nobody told him to stop, and a deer that never moves
                     # for an hour isn't right either.
                     self.rouse = True
-                    if self.pose == "graze":
-                        self.pose = "stand"
-                        self.graze_for = 0.0
+                    self.drop_idle()
                     return
                 # He turns and walks into the open ground, away from the
                 # nearer edge, as far as that side holds. Home is
@@ -2382,8 +2578,11 @@ class Pet:
             debug("doze: %s", "eye shut" if self.doze else "eye open")
         if self.pose != self._last_pose:
             why = ""
-            if self.pose == "graze":
-                why = " for %.0fs" % self.graze_for
+            if self.idle is not None and self.pose == self.idle.pose:
+                why = " for %.1fs" % self.idle_for
+            elif self.idle is not None:
+                why = " (%s %s)" % ("into" if self.idle_for > 0 else "out of",
+                                    self.idle.pose)
             elif self.pose == "rest":
                 why = " (snoozed)" if self.snoozing(now) else " (away)"
             elif self.pose == "settle":
@@ -2687,7 +2886,8 @@ def main(argv=None):
     p.add_argument("--quiet", action="store_true",
                    help="no ambient tips; only when asked or on context")
     p.add_argument("--still", action="store_true",
-                   help="never walk, bound or graze; he only blinks and talks")
+                   help="never walk, bound, graze or reach for the coffee; "
+                        "he only blinks and talks")
     p.add_argument("--sprite", choices=sorted(SPRITES),
                    help="which character: yoru (the deer, default) or dane; "
                         "remembered, so it survives a restart")

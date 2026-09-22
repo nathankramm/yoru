@@ -16,6 +16,12 @@ def ck(n, ok, d=""):
     if not ok: F.append(n)
 
 
+def quiet_idles(q):
+    """Park every idle action a character has, so a check that is about
+    something else never has a graze or a coffee happening through it."""
+    q.next_idle = [1e9] * len(q.next_idle)
+    return q
+
 src = open(os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "yoru.py")).read()
 ck("1 hide toggle", "SIGUSR1" in src and "--start-hidden" in src)
@@ -241,7 +247,7 @@ def which(l):
     return "nr" if x <= 5 else "fr" if x <= 8 else "ff" if x <= 12 else "nf"
 order = [which(l) for l in lifted if l]
 trot_down = all(all(p[1] == 23 for p in hooves(f, "trot")) for f in range(4))
-q = m.Pet(O, m.KNOWLEDGE); q.seen = set(); q.present_until = 1e9; q.next_talk = q.next_graze = 1e9
+q = m.Pet(O, m.KNOWLEDGE); q.seen = set(); q.present_until = 1e9; q.next_talk = 1e9; quiet_idles(q)
 q.step(.033, 0.0, 1920, 1080)
 gaits = collections.Counter(); flags = collections.Counter(); wags = collections.Counter(); t = 0.0
 random.seed(5)
@@ -437,7 +443,7 @@ ck("34 --still never moves", moved == 0 and poses == 0 and modes == 0 and blinks
    % (moved, poses, modes, blinks, "yes" if spoke else "NO"))
 # Redraw-on-change: the key is stable across a static stretch and changes
 # on every frame of a walk, so skipping equal keys cannot drop motion.
-q = m.Pet(O, m.KNOWLEDGE); q.seen = set(); q.next_talk = q.next_roam = q.next_graze = 1e9
+q = m.Pet(O, m.KNOWLEDGE); q.seen = set(); q.next_talk = q.next_roam = 1e9; quiet_idles(q)
 q.blink = q.ear = q.tail = 0; q.next_blink = q.next_ear = q.next_tail = 1e9
 for i in range(30): q.step(.033, i * .033, 1920, 1080)      # he is away here: let him lie down first
 q.chews_left = 0; q.chew = False; q.next_chew = 1e9         # ...and hold his jaw too
@@ -481,7 +487,7 @@ def run_pet(q, secs, start, dt=.033):
         now += dt; q.step(dt, now, 1920, 1080)
     return now
 mid = types.SimpleNamespace(get_current_button=lambda: 2)
-q = app.pet; q.seen = set(); q.present_until = 1e9; q.next_talk = q.next_roam = q.next_graze = 1e9
+q = app.pet; q.seen = set(); q.present_until = 1e9; q.next_talk = q.next_roam = 1e9; quiet_idles(q)
 m.visible = True
 base = m.GLib.get_monotonic_time() / 1e6          # on_click reads the real clock, so
 t = run_pet(q, 2, base); k0 = q.render_key()      # the simulated one starts there too
@@ -501,7 +507,7 @@ ck("43 middle click lies him down; again stands him up", snoozed and said_standi
 # lapses -- not before -- and the first sign of activity stands him up on the
 # next frame. --still gets the pose too: it is not movement.
 def away_pet(**kw):
-    q = fresh_pet(**kw); q.next_talk = q.next_roam = q.next_graze = 1e9
+    q = fresh_pet(**kw); q.next_talk = q.next_roam = 1e9; quiet_idles(q)
     q.saw_activity(0.0); q.step(.033, 0.0, 1920, 1080); return q
 q = away_pet(); t = run_pet(q, 290, 0.0); early = q.pose
 t = run_pet(q, 20, t); lapsed = q.pose; k_away = q.render_key()
@@ -580,7 +586,7 @@ def hold(q, t, dt=.033):
     via = [p for i, p in enumerate(seen) if i == 0 or p != seen[i - 1]]
     hold.keys = len(keys)                     # start, settle, end: three drawings
     return seen.count("settle"), [p for p in via if p != start], t
-q = fresh_pet(); q.present_until = 1e9; q.next_talk = q.next_roam = q.next_graze = 1e9
+q = fresh_pet(); q.present_until = 1e9; q.next_talk = q.next_roam = 1e9; quiet_idles(q)
 t = run_pet(q, 1, 0.0)
 q.snooze_until = 1e9
 down, via_down, t = hold(q, t); keys_down = hold.keys
@@ -677,7 +683,7 @@ ck("50 doze cycle: beds alert, dozes 30s-3min, wakes 15-60s, no cud or blink shu
 # shuffle; from the middle they all go the one way `open` happens to point; parked
 # with no room on the open side he skips the roam rather than take two steps.
 def trips(home_x, n=60, width=1920):
-    q = m.Pet(O, m.KNOWLEDGE); q.seen = set(); q.present_until = 1e9; q.next_talk = q.next_graze = 1e9
+    q = m.Pet(O, m.KNOWLEDGE); q.seen = set(); q.present_until = 1e9; q.next_talk = 1e9; quiet_idles(q)
     q.place(width, 1080); q.home_x = q.x = home_x; q.step(.033, 0.0, width, 1080)
     out = []; t = 0.0
     for _ in range(n):
@@ -705,7 +711,7 @@ ck("53 trips fit the room and are never a shuffle", mt == 70.4 and corner_ok and
 # middle of the screen. He walks the other way, into the open.
 def parked(**kw):
     q = m.Pet(types.SimpleNamespace(**dict(vars(O), **kw)), m.KNOWLEDGE); q.seen = set()
-    q.present_until = 1e9; q.next_talk = q.next_roam = q.next_graze = 1e9
+    q.present_until = 1e9; q.next_talk = q.next_roam = 1e9; quiet_idles(q)
     q.place(1920, 1080); q.step(.033, 0.0, 1920, 1080); return q
 faces = {c: parked(corner=c).dir for c in ("br", "tr", "bl", "tl")}
 corners_ok = faces == dict(br=1, tr=1, bl=-1, tl=-1)
@@ -851,18 +857,26 @@ ck("57 two characters, the deer the default, each with a canvas, a scale, a roam
    and not chars["dane"].roams and not chars["dane"].mirrors and chars["dane"].gaits == ()
    and chars["dane"].turn == m.DANE_TURN == ("work", "folding", "closing", "speak")
    and not chars["dane"].tics
-   and "flip = pet.dir < 0 and ch.mirrors" in src,
-   {n: "%dx%d @%dx %s %s %s; idle every %d-%ds for %d-%ds" % (
+   and "flip = pet.dir < 0 and ch.mirrors" in src
+   # every character's idle actions are its own data: a held pose, a path
+   # into it whose last frame is that pose, a cadence and a duration
+   and all(a.path and a.path[-1] == a.pose and a.every[0] < a.every[1]
+           and a.secs[0] < a.secs[1] and a.every[0] > a.secs[1]
+           for c in chars.values() for a in c.idles)
+   and [a.pose for a in chars["yoru"].idles] == ["graze"]
+   and [a.pose for a in chars["dane"].idles] == ["sip", "beard"],
+   {n: "%dx%d @%dx %s %s %s; idle %s" % (
        c.w, c.h, c.scale, "roams " + "/".join(c.gaits) if c.roams else "stays",
        "mirrors" if c.mirrors else "fixed",
        "states " + "/".join(c.turn) if c.turn else "one view",
-       c.idle_every[0], c.idle_every[1], c.idle_for[0], c.idle_for[1])
-    for n, c in chars.items()})
+       ", ".join("%s every %d-%ds for %.1f-%.1fs over %d frames"
+                 % (a.pose, a.every[0], a.every[1], a.secs[0], a.secs[1], len(a.path))
+                 for a in c.idles)) for n, c in chars.items()})
 # Bounds, from the canvas. The deer overhangs his by design (the graze
 # shift, the bound's lift), by the margins check 26 allows; The Dane's
 # scene stays inside his, so a wider canvas later is a data change.
 c = chars["dane"]
-DANE_POSES = ("stand", "graze", "rest", "settle")
+DANE_POSES = ("stand", "rest", "settle") + m.COFFEE_PATH + m.BEARD_PATH
 def dane_frames():
     for view in c.turn:
         for pose in DANE_POSES:
@@ -911,10 +925,11 @@ for k, pts in dane_frames():
                     if all(comp.get((x, y)) in LAP for y in range(ly0, ly1 + 1) for x in range(lx0, lx1 + 1))
                     and comp.get(((lx0 + lx1) // 2, ly0 - 1)) not in LAP), None)   # above its middle: his shirt or the O, never his sleeve
     # The forearms, checked against the other frames rather than against
-    # the table they came from, which would only be reading the data back:
-    # upright, the far arm is the same pixels in every frame, and nothing
-    # on the keyboard row is ever skin, which is the whole of "the hands
-    # stay behind the lid".
+    # the table they came from, which would only be reading the data back.
+    # Upright, the far arm is the same pixels in every frame; nothing on
+    # the keyboard row is ever skin, which is the whole of "the hands stay
+    # behind the lid"; and the frame differs from the working frame of the
+    # same view exactly when an idle action has the near arm.
     skin = (pal["K"], kk)
     if k[1] in ("rest", "settle"):
         hands[k] = None
@@ -945,6 +960,12 @@ for k, pts in dane_frames():
 want_lid = {k: "speak" if k[1] in ("rest", "settle") else k[0] for k in lids}
 far_ref = next(v[0] for k, v in hands.items() if v is not None and k[1] == "stand")
 want_open = {k: None if hands[k] is None else (far_ref, False) for k in lids}
+# and the near arm: an idle pose draws a different frame from the working
+# one it started from, and the working frames of every view draw the same
+# arm as each other.
+arms = {k: tuple(sorted(pts)) for k, pts in dane_frames()}
+moved = {k for k in arms if k[1] not in ("rest", "settle") and k[1] != "stand"
+         and arms[k] == arms[(k[0], "stand") + k[2:]]}
 # the fold, in rows of lid still standing: even steps, no frame twice another
 fold = [m.LAPTOP_LID[v][1] - m.LAPTOP_LID[v][0] + 1 for v in c.turn]
 steps = [a - b for a, b in zip(fold, fold[1:])]
@@ -952,12 +973,13 @@ steps = [a - b for a, b in zip(fold, fold[1:])]
 # (a doze is a rest thing: the Pet never dozes elsewhere, and the settle ignores it)
 want_gaze = {k: "hidden" if k[1] == "rest" else "shut" if (k[2] or (k[3] and k[1] != "settle"))
              else "up" if k[0] == "speak" and k[1] != "settle" else "down" for k in gaze}
-ck("60 the desk: tabletop clean, his legs on the chair beneath it; the lid is the view's and a slab to speak or rest, and folds in even steps; the forearms to the desk and behind the lid, still; eyes down working, up speaking",
+ck("60 the desk: tabletop clean, his legs on the chair beneath it; the lid is the view's and a slab to speak or rest, and folds in even steps; the near forearm at the keys only while he works, the far one always, both still; eyes down for everything but speaking",
    not through and lids == want_lid and hands == want_open and gaze == want_gaze
-   and len(fold) >= 4 and len(set(steps)) == 1 and steps[0] > 0,
-   "desk wrong in %s; lid wrong in %s; forearms wrong in %s; gaze wrong in %s; fold %s rows (steps %s); far arm %d px, same in all %d upright frames" % (
+   and not moved and len(fold) >= 4 and len(set(steps)) == 1 and steps[0] > 0,
+   "desk wrong in %s; lid wrong in %s; forearms wrong in %s; poses that drew the working frame %s; gaze wrong in %s; fold %s rows (steps %s); far arm %d px, same in all %d upright frames" % (
        through[:2] or "none", [(k, lids[k]) for k in lids if lids[k] != want_lid[k]][:2] or "none",
        [k for k in hands if hands[k] != want_open[k]][:2] or "none",
+       sorted({k[1] for k in moved}) or "none",
        [(k, gaze[k]) for k in gaze if gaze[k] != want_gaze[k]][:2] or "none",
        "-".join(str(f) for f in fold), set(steps),
        len(far_ref), sum(1 for v in hands.values() if v is not None)))
@@ -1077,7 +1099,7 @@ def run_views(q, secs, t0=0.0):
         out[-1][1] += DT * 1000
     return out, t
 q = m.Pet(types.SimpleNamespace(**dict(vars(O), scale=None, sprite="dane")), m.KNOWLEDGE)
-q.present_until = 1e9; q.next_talk = q.next_graze = 1e9; q.step(DT, 0.0, 1920, 1080)
+q.present_until = 1e9; q.next_talk = 1e9; quiet_idles(q); q.step(DT, 0.0, 1920, 1080)
 keys = [q.render_key()]; t = 0.0
 q.say("x", "hello", 1.0, 0.0)
 held = [[q.view, 0.0]]
@@ -1109,6 +1131,129 @@ ck("66 speaking folds the laptop down a frame at a time and back, every frame of
        " -> ".join(seq), ", ".join("%.0fms" % ms for ms in mid), want_ms,
        all(a != b for a, b in zip(keys, keys[1:])),
        sum(moves.values()), sorted(set(moves)) or "none"))
+# The idle actions, watched rather than listed. Each one is a path of
+# held frames in and the same path back out, IDLE_STEP each, with the
+# last frame held for as long as the action lasts -- the deer's graze is
+# a path of one, which is why it still behaves exactly as it did. Every
+# frame of it is a different render key, or a step of it is never drawn.
+# And through all of it his eyes stay down: he is working, not talking.
+DTI = .033
+def play(act, secs=8.0, sprite="dane"):
+    """Force one idle action and report the poses he holds, in order,
+    with how long each is held in milliseconds."""
+    random.seed(5)
+    p = m.Pet(types.SimpleNamespace(**dict(vars(O), scale=None, sprite=sprite)), m.KNOWLEDGE)
+    p.seen = set(); p.place(1920, 1080); p.present_until = 1e9
+    p.next_talk = p.next_roam = 1e9; quiet_idles(p)
+    p.step(DTI, 0.0, 1920, 1080)
+    p.next_idle[[a.pose for a in p.character.idles].index(act)] = 0.0
+    out = [[p.pose, 0.0, p.render_key()]]; t = 0.0
+    for _ in range(int(secs / DTI)):
+        t += DTI; p.step(DTI, t, 1920, 1080)
+        if p.pose != out[-1][0]: out.append([p.pose, 0.0, p.render_key()])
+        out[-1][1] += DTI * 1000
+    return p, out
+bad = []; report = []
+for ch_name, act in (("yoru", "graze"), ("dane", "sip"), ("dane", "beard")):
+    p, held = play(act, sprite=ch_name)
+    a = next(x for x in p.character.idles if x.pose == act)
+    poses = [h[0] for h in held]
+    want = ["stand"] + list(a.path) + list(reversed(a.path[:-1])) + ["stand"]
+    if poses != want:
+        bad.append((act, "poses %s, wanted %s" % (poses, want)))
+    steps = [ms for pose, ms, _ in held[1:-1] if pose != act]
+    if any(abs(ms - m.IDLE_STEP * 1000) > 40 for ms in steps):
+        bad.append((act, "path frames held %s, wanted %.0fms" % (steps, m.IDLE_STEP * 1000)))
+    on = next(ms for pose, ms, _ in held if pose == act)
+    if not (a.secs[0] * 1000 - 60 <= on <= a.secs[1] * 1000 + 60):
+        bad.append((act, "held %.0fms, wanted %.1f-%.1fs" % (on, *a.secs)))
+    # adjacent, not unique: he passes through "reach" twice, once on the
+    # way out and once on the way back, and those two are the same drawing
+    keys = [h[2] for h in held]
+    if any(a == b for a, b in zip(keys, keys[1:])):
+        bad.append((act, "a frame of the path is never drawn"))
+    report.append("%s: %s, path frames %s, held %.0fms"
+                  % (act, "-".join(poses), ", ".join("%.0fms" % x for x in steps) or "none", on))
+# The eyes, and the mug. Through every frame of the coffee he is looking
+# down -- check 60 already proves that from the drawing -- and the mug is
+# carried, not redrawn: every pixel of it that the laptop and his own
+# hand are not covering is the mug's own tone, in every frame of the
+# path, with the coffee showing until he tips it to drink.
+pal = m.dane_palette()
+def hidden(x, y, view, pose):
+    for ly0, ly1, lx0, lx1 in (m.LAPTOP_LID[view], m.LAPTOP_BASE):
+        if ly0 <= y <= ly1 and lx0 <= x <= lx1: return True
+    dy, dx = m.MUG_CARRY[pose]
+    return any(y == hy + dy and hx0 + dx <= x <= hx1 + dx for hy, hx0, hx1 in m.MUG_HAND)
+carried = []
+for pose, (dy, dx) in sorted(m.MUG_CARRY.items()):
+    for view in chars["dane"].turn:
+        comp = {(x, y): col for x, y, col in m.dane_pixels(1, False, pose, view=view)}
+        body = [(x, y) for y in range(m.MUG[0], m.MUG[1] + 1) for x in range(m.MUG[2], m.MUG[3] + 1)]
+        body += [(x, y) for y, x0, x1 in m.MUG_HANDLE for x in range(x0, x1 + 1)]
+        cof = [(x, m.MUG_COFFEE[0]) for x in range(m.MUG_COFFEE[1], m.MUG_COFFEE[2] + 1)]
+        tipped = pose in m.MUG_TIPPED
+        for x, y in body:
+            X, Y = x + dx, y + dy
+            if hidden(X, Y, view, pose): continue
+            want = pal["F"] if ((x, y) in cof and not tipped) else pal["s"]
+            if comp.get((X, Y)) != want:
+                carried.append((pose, view, (X, Y))); break
+ck("67 the coffee and the beard stroke go in and come back out a frame at a time, each held frame drawn and timed; the deer's graze is still the one frame it always was; the mug is carried whole, and tipped it stops showing its coffee",
+   not bad and not carried,
+   "%s; mug wrong at %s" % ("; ".join(report), carried[:3] or "none"))
+# How often. Each action has a clock of its own and that is the whole of
+# what makes one rarer than another, so this measures them over four
+# hours rather than trusting the numbers in the table. What it is really
+# checking is the share: he is at a desk working, and stillness at work
+# reads as focus. A man who reaches for his coffee every thirty seconds
+# reads as a screensaver.
+HOURS, DTL = 4, 0.1
+random.seed(17)
+p = m.Pet(types.SimpleNamespace(**dict(vars(O), scale=None, sprite="dane")), m.KNOWLEDGE)
+p.seen = set(); p.place(1920, 1080); p.present_until = 1e9; p.next_talk = 1e9
+p.step(DTL, 0.0, 1920, 1080)
+runs = [[None, 0.0]]; t = 0.0; busy = 0; overlap = 0
+for _ in range(int(HOURS * 3600 / DTL)):
+    t += DTL; p.step(DTL, t, 1920, 1080)
+    p.present_until = t + 1e6
+    act = p.idle.pose if p.idle else None
+    if act != runs[-1][0]: runs.append([act, 0.0])
+    runs[-1][1] += DTL
+    if p.pose != "stand": busy += 1
+bouts = collections.Counter(a for a, _ in runs if a)
+share = busy * DTL / (HOURS * 3600)
+# and nothing starts while he is speaking, snoozed, or the chair is empty
+quiet = {}
+for name, setup in (("snoozed", lambda q: setattr(q, "snooze_until", 1e9)),
+                    ("away", lambda q: setattr(q, "present_until", 0.0)),
+                    ("--still", lambda q: setattr(q, "still", True))):
+    random.seed(23)
+    q = m.Pet(types.SimpleNamespace(**dict(vars(O), scale=None, sprite="dane")), m.KNOWLEDGE)
+    q.seen = set(); q.place(1920, 1080); q.next_talk = 1e9; q.present_until = 1e9
+    setup(q)
+    started = 0; tq = 0.0
+    for _ in range(int(3600 / DTL)):
+        tq += DTL; q.step(DTL, tq, 1920, 1080)
+        if name != "away": q.present_until = tq + 1e6
+        if q.idle is not None: started += 1
+    quiet[name] = started
+# a word mid-sip puts the mug back on the desk a frame at a time
+p2, held2 = play("sip", secs=1.2)
+p2.say("x", "hello", 2.0, 1.2)
+back = [p2.pose]; t2 = 1.2
+for _ in range(int(2.0 / DTI)):
+    t2 += DTI; p2.step(DTI, t2, 1920, 1080)
+    if p2.pose != back[-1]: back.append(p2.pose)
+path = list(m.COFFEE_PATH)
+want_back = path[path.index(back[0])::-1] + ["stand"] if back[0] in path else None
+spoke_up = [b for b in back if b in path[1:]] and back[-1] == "stand"
+ck("68 how often: the beard stroke is the rarer of the two, both are minutes apart, and he is working for almost all of it; nothing starts while he speaks, sleeps or the chair is empty; a word mid-sip puts the mug back rather than vanishing it",
+   bouts["beard"] * 2 < bouts["sip"] and 20 <= bouts["sip"] <= 110 and 4 <= bouts["beard"] <= 30
+   and share < 0.05 and not any(quiet.values()) and back == want_back,
+   "%dh: %d coffees, %d beard strokes, idle %.1f%% of the time; held off while %s; interrupted sip goes %s"
+   % (HOURS, bouts["sip"], bouts["beard"], share * 100,
+      ", ".join("%s (%d)" % (k, v) for k, v in quiet.items()), "-".join(back)))
 # The accent, everywhere, not just on his face. Check 60 watched the face
 # because that is where a glow was once drawn and read as a rash; this
 # watches the whole canvas, because the thing that actually got through

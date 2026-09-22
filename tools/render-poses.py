@@ -9,7 +9,7 @@ rest or a deer that fell over. This can. Run it, open the PNG, look.
     python3 tools/render-poses.py --theme catppuccin-latte   # a shipped one, by name
     python3 tools/render-poses.py --zoom 16 out.png
     python3 tools/render-poses.py --sprite dane              # The Dane, at his own scale
-    python3 tools/render-poses.py --sprite dane --cells lid             # only those cells
+    python3 tools/render-poses.py --sprite dane --cells coffee          # only those cells
 
 The background is the theme's own, the colour the halo is drawn in: the
 harshest case, and the common one, since he mostly stands over a terminal.
@@ -56,11 +56,18 @@ if "--cells" in args:
 out = args[0] if args else "poses.png"
 
 # (label, pixels() arguments, mirrored)
-# The Dane's sheet is his states in the order he plays them, so a row of
-# cells is the motion laid out flat: the lid folding down to speak, and
-# folding the other way with his head going down behind it.
+# The Dane's sheet is his transitions in the order he plays them, so a
+# row of cells is the motion laid out flat: the coffee out and back, the
+# beard stroke, the lid folding to speak, and the lid folding the other
+# way with his head going down behind it.
 DANE_CELLS = [
     ("working (eyes down)", dict(frame=1, blink=False, view="work", tic=0), False),
+    ("coffee: reach", dict(frame=1, blink=False, pose="reach", view="work"), False),
+    ("coffee: lift", dict(frame=1, blink=False, pose="lift", view="work"), False),
+    ("coffee: carry", dict(frame=1, blink=False, pose="carry", view="work"), False),
+    ("coffee: sip", dict(frame=1, blink=False, pose="sip", view="work"), False),
+    ("beard: raise", dict(frame=1, blink=False, pose="raise", view="work"), False),
+    ("beard: stroke", dict(frame=1, blink=False, pose="beard", view="work"), False),
     ("lid folding", dict(frame=1, blink=False, view="folding"), False),
     ("lid closing", dict(frame=1, blink=False, view="closing"), False),
     ("speaking (eyes up)", dict(frame=1, blink=False, view="speak"), False),
@@ -93,9 +100,9 @@ if sprite == "dane":
     CELLS = DANE_CELLS
 if only:
     # A name that is exactly a label picks that one cell; anything else is
-    # a prefix, so "lid" is both frames of the fold and "head down" on its
-    # own is not also "head down, blink". Cells come out in the order
-    # asked for, which is how the README sheet is arranged.
+    # a prefix, so "coffee" is the whole action and "head down" on its own
+    # is not also "head down, blink". Cells come out in the order asked
+    # for, which is how the README sheet is arranged.
     picked = []
     for n in only:
         for c in ([c for c in CELLS if c[0] == n] or [c for c in CELLS if c[0].startswith(n)]):

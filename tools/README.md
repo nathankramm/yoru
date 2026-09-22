@@ -92,21 +92,22 @@ the twenty minutes.
 Draws every pose of a character to one PNG, with the outline halo and on
 the theme background exactly as `draw_sprite` puts them on screen — the
 deer standing, grazing, the trot and bound frames, the settle frame and
-resting, each with its blink, ear and tail; The Dane working, the laptop
-folding down, speaking, settling and asleep.
+resting, each with its blink, ear and tail; The Dane working, his coffee
+and his beard stroke frame by frame, the laptop folding down, speaking,
+settling and asleep.
 
     python3 tools/render-poses.py                # built-in palette -> poses.png
     python3 tools/render-poses.py --theme        # the live Omarchy theme
     python3 tools/render-poses.py --theme catppuccin-latte   # a shipped one, by name
     python3 tools/render-poses.py --zoom 16 out.png
     python3 tools/render-poses.py --sprite dane              # at his own 2x
-    python3 tools/render-poses.py --sprite dane --cells lid
+    python3 tools/render-poses.py --sprite dane --cells coffee
 
 `--cells` takes cell labels; a name that is exactly a label picks that one
 cell, anything else is a prefix, and they come out in the order you asked
 for. The two-row sheet in the README is that, twice, appended:
 
-    CELLS="working (eyes down),lid folding,speaking (eyes up),settle (going down),head down"
+    CELLS="working (eyes down),coffee: sip,beard: stroke,speaking (eyes up),settle (going down),head down"
     python3 tools/render-poses.py --sprite dane --theme tokyo-night      --cells "$CELLS" /tmp/dark.png
     python3 tools/render-poses.py --sprite dane --theme catppuccin-latte --cells "$CELLS" /tmp/light.png
     magick /tmp/dark.png /tmp/light.png -append docs/dane-front-2x.png
@@ -116,7 +117,8 @@ it should. Whether the pose reads as a deer at rest or a deer that fell over
 is the one thing it cannot check, and that has needed a look several times
 now. To compare candidates, replace the function under test on the loaded
 module (`m._folded_legs = candidate`) and add a cell per candidate; the
-resting pose was chosen that way, over three rounds of sheets.
+resting pose was chosen that way over three rounds of sheets, and the
+coffee sip over two.
 
 Judge at the scale the character ships at — `--zoom 4` for the deer, the
 default `2` for The Dane — and magnify the *rendered* file if you need a

@@ -291,7 +291,7 @@ yoru --forget-known       # un-retire everything
 | `--no-basics` | | skip the eighteen first-hour tips he otherwise leads with |
 | `--no-packages` | | teach software whether or not `pacman` says it's installed |
 | `--start-hidden` | | begin off screen |
-| `--still` | | never walk, bound or graze — for anyone who finds movement at the edge of vision distracting; he still blinks and talks |
+| `--still` | | never walk, bound, graze or reach for the coffee — for anyone who finds movement at the edge of vision distracting; he still blinks and talks |
 | `--sprite` | saved, else `yoru` | which character: `yoru` (the deer) or `dane` (The Dane). Remembered in `state.json`, so it survives a restart; given, it overwrites the memory |
 | `--swap` | | swap the running instance's character (`SIGUSR2`) and exit — what `Super + Ctrl + Shift + Y` does |
 | `--version` | | print the version and exit |
@@ -386,14 +386,26 @@ He lives at a desk, facing you. A tabletop on two slim legs, him seated
 behind it with his legs showing beneath, a laptop open on the desk facing
 him — so what you see is the back of the lid — and a mug beside it. He
 works, and while he works the only thing that moves is his blink: his
-hands are behind the lid, where a keyboard is. He doesn't roam: wandering out and back is
+hands are behind the lid, where a keyboard is, and stillness at a desk
+reads as concentration. He doesn't roam: wandering out and back is
 grazing behaviour, right for an animal, and a man doing it reads as
 pacing. The deer still roams; whether a character does is his own data.
 Dragging moves the whole scene; it doesn't mirror.
 
+Twice in a long while he stops. Every few minutes he takes his coffee —
+his hand out to the mug, the mug up off the desk, and a sip, three held
+frames out and the same three back, and the mug goes back down even if
+you interrupt him. Perhaps a quarter as often he strokes his beard for a
+second, a hand up to his jaw and back behind the laptop. That is the
+whole of it. They are the deer's graze, and like the graze they are what
+keeps a still drawing from reading as a crashed one — but they are far
+rarer than his, because a man at a desk who fidgets every twenty seconds
+isn't working, he's a screensaver.
+
 The turn-away is in his eyes. The research is about an agent that
 appears to watch you, and gaze is what signals watching: while he works
-his eyes are down, on the laptop, so he isn't watching you. Speaking, he closes the laptop: the lid
+his eyes are down, on the laptop, so he isn't watching you — through the
+coffee and the beard stroke too. Speaking, he closes the laptop: the lid
 folds down toward him over two held frames, seven rows of screen to five
 to three to one, so it reads as a lid coming down and not as a cut. Then
 he looks up at you, and speaks. Closing the laptop is the point: he stops
@@ -402,6 +414,11 @@ again, a frame at a time, and his eyes go back down. Snoozed, or once
 you've been away, his head goes down on folded arms on the desk, through
 one held frame each way. The props take the theme through the same tones
 as his clothes.
+
+<p align="center">
+  <img src="docs/dane-front-2x.png" alt="The Dane working, sipping, stroking his beard, speaking, settling and asleep, on Tokyo Night and Catppuccin Latte" width="904"><br>
+  <sub>Every state he has, at the size he ships at, on a dark theme and a light one.</sub>
+</p>
 
 Everything that isn't the drawing is the same code. He says the same 194
 things, notices the same apps, keeps the same cadence, turns away from you
@@ -418,9 +435,12 @@ Start as him with `yoru --sprite dane`; swap while running with
 The deer stays the default.
 
 A third character would be its maps, a palette of roles and a pose table,
-with a canvas size and a pixel scale of its own — the Pet reads all of it
-from the character and nothing else, and the sprite checks in
-`tools/audit.py` run from the same data.
+with a canvas size, a pixel scale, a list of idle actions and a settle
+frame of its own — the Pet reads all of it from the character and nothing
+else, and the sprite checks in `tools/audit.py` run from the same data.
+An idle action is a held pose, a path of frames into it, how often it
+comes and how long it lasts; the deer's graze is a path of one frame,
+The Dane's coffee is four.
 
 ---
 

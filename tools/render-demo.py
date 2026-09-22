@@ -85,9 +85,16 @@ class Clock:
         self.pet = m.Pet(o, m.KNOWLEDGE)
         self.t = 0.0
         self.pet.place(W, H)
-        # Centered, and on the bottom edge, which is where he actually
-        # lives: the bottom of the screen is the ground.
-        self.pet.home_x = self.pet.x = (W - self.pet.w) // 2
+        # Centered on his weight rather than on his canvas, and on the
+        # bottom edge, which is where he actually lives: the bottom of the
+        # screen is the ground. Centering the canvas put the deer and The
+        # Dane eight pixels apart, because their canvases are 96 and 112
+        # wide, so two clips of the same swap disagreed about where he
+        # stood -- invisible inside one clip, obvious watching them back to
+        # back. Their weight is the thing the eye lines up (see
+        # Character.middle).
+        self.pet.x = W / 2.0 - self.pet.middle_of(self.pet.character)
+        self.pet.home_x = self.pet.x
         self.pet.home_y = self.pet.y = H - self.pet.h
         self.pet.present_until = 1e9
         self.pet.next_talk = 1e9

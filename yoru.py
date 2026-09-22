@@ -1237,6 +1237,41 @@ class Character:
         self.tics, self.tic_every, self.views, self.turn = tics, tic_every, views, turn
         self.idles = idles
         self.settle_secs = settle_secs
+        self._middle = None
+
+    def own_view(self, want=None):
+        """A view this character actually has, given one that may not be
+        its own. Mid-swap the Pet is still holding the other character's,
+        and the deer's is "side", which is not a state a laptop has: a
+        character with a fold falls back to the shut end of it, which is
+        where a swap leaves it, and anything else to its first."""
+        if not self.views:
+            return None
+        if want in self.views:
+            return want
+        return self.turn[-2] if len(self.turn) >= 2 else self.views[0]
+
+    def middle(self):
+        """Where the drawing's weight sits across its canvas, in sprite
+        pixels from the left edge -- the mean of every pixel it puts down
+        standing still.
+
+        A canvas is not a character. The deer fills his: 24 wide, ink from
+        0 to 23, weight at 11.6. The Dane's canvas is 56 wide and his desk
+        only occupies 6 to 49, so his weight is at 28.0 -- and at 2px
+        against the deer's 4px that is 56 screen pixels from the left edge
+        against the deer's 46. Line the two canvases up by their left edges
+        and the visible mass jumps ten pixels sideways, which is what the
+        swap used to do. Line them up by this instead and it does not.
+
+        Measured once, from the standing frame, and kept: an idle action or
+        a lowered head moves the weight a little and the anchor must not
+        move with it."""
+        if self._middle is None:
+            view = self.own_view(self.views[0] if self.views else None)
+            pts = self.pixels(1, False, "stand", **({"view": view} if view else {}))
+            self._middle = sum(x for x, _, _ in pts) / float(len(pts)) + 0.5
+        return self._middle
 
 
 SPRITES = {
@@ -2107,6 +2142,18 @@ class Pet:
         necessarily the one he is: --scale still overrides every one."""
         return self._scale or ch.scale
 
+    def middle_of(self, ch):
+        """Where that character's weight sits, in screen pixels from his x."""
+        return ch.middle() * self.px_of(ch)
+
+    def morph_shift(self):
+        """How far the character arriving is drawn from the one leaving, so
+        the two of them share a centre through the dissolve and the arriving
+        one is already standing where it will end up."""
+        if self.morph is None:
+            return 0.0
+        return self.middle_of(self.character) - self.middle_of(self.morph)
+
     def morph_progress(self):
         """0 at the first frame of the dissolve, 1 at the last."""
         if self.morph is None:
@@ -2117,11 +2164,14 @@ class Pet:
         """The box the input region follows. Mid-swap it is both of them:
         the two footprints differ, and a character half-drawn outside the
         region is a character you cannot drag."""
-        w, h = self.w, self.h
-        if self.morph is not None:
-            px = self.px_of(self.morph)
-            w, h = max(w, self.morph.w * px), max(h, self.morph.h * px)
-        return int(self.x), int(self.y + self.h - h), int(w), int(h)
+        if self.morph is None:
+            return int(self.x), int(self.y), int(self.w), int(self.h)
+        px, dx = self.px_of(self.morph), self.morph_shift()
+        left = min(0.0, dx)
+        right = max(self.w, dx + self.morph.w * px)
+        h = max(self.h, self.morph.h * px)
+        return (int(self.x + left), int(self.y + self.h - h),
+                int(right - left), int(h))
 
     # -- idle actions ------------------------------------------------------
     def fresh_idles(self):
@@ -2162,11 +2212,17 @@ class Pet:
 
     def swap(self, width, height, into=None):
         """Become the character the dissolve has been drawing, keeping the
-        spot, the facing and everything else. Two characters may differ in
-        height; the feet stay on the ground line, so the top moves, not the
-        bottom. A second ask that arrived during the dissolve is left
-        standing, so it takes effect on the next step."""
-        was, was_h = self.character, self.h
+        spot, the facing and everything else. A second ask that arrived
+        during the dissolve is left standing, so it takes effect on the
+        next step.
+
+        "The spot" is where he looks like he is, not where his canvas
+        starts. Two characters may differ in height, so the feet stay on
+        the ground line and the top moves; they may differ in width and in
+        where their weight sits across it, so the weight stays put and the
+        canvas edge moves (see Character.middle). Holding the edge instead
+        slid the visible mass ten pixels sideways every swap."""
+        was, was_h, was_mid = self.character, self.h, self.middle_of(self.character)
         self.character = into or SPRITES[self.swap_to]
         if self.swap_to == self.character.name:
             self.swap_to = None
@@ -2181,10 +2237,18 @@ class Pet:
         self.idle, self.idle_step, self.idle_hold, self.idle_for = None, -1, 0.0, 0.0
         self.next_idle = self.fresh_idles()
         dh = was_h - self.h                 # canvas and scale may both differ
+        dx = was_mid - self.middle_of(self.character)
+        self.x += dx
         self.y += dh
         if self.home_y is not None:
+            self.home_x += dx
             self.home_y += dh
             self.clamp_home(width, height)
+        # Both, not just the vertical: dragged hard against the right edge
+        # the wider character used to run off it, and home_x was clamped
+        # while x was not, so he jumped sideways the next time anything
+        # read home.
+        self.x = max(4, min(self.x, width - self.w - 4))
         self.y = max(4, min(self.y, height - self.h))
         st = read_state()
         st["sprite"] = self.character.name
@@ -3189,9 +3253,9 @@ def sprite_pixels(pet, ch):
     mid-swap the Pet is still holding the other one's, and the deer's is
     "side", which is not a state a laptop has."""
     extra = {}
-    if ch.views:
-        extra["view"] = (pet.view if pet.view in ch.views
-                         else ch.turn[max(0, len(ch.turn) - 2)])
+    view = ch.own_view(pet.view)
+    if view:
+        extra["view"] = view
     if "tic" in ch.tics:
         extra["tic"] = pet.tic
     return ch.pixels(pet.frame(), pet.blink > 0, pet.pose,
@@ -3199,12 +3263,12 @@ def sprite_pixels(pet, ch):
                      pet.gait(), pet.chew, pet.doze, **extra)
 
 
-def paint_sprite(cr, pet, ch, oy, pts):
+def paint_sprite(cr, pet, ch, oy, pts, ox=0.0):
     px = pet.px_of(ch)
     flip = pet.dir < 0 and ch.mirrors        # a character that doesn't mirror ignores the facing
 
     def sx(x):
-        return pet.x + ((ch.w - 1 - x) if flip else x) * px
+        return pet.x + ox + ((ch.w - 1 - x) if flip else x) * px
 
     cr.set_source_rgba(*OUTLINE, 0.85)
     for x, y, _ in pts:
@@ -3227,12 +3291,15 @@ def draw_sprite(cr, pet, oy):
         return
     p = pet.morph_progress()
     into = pet.morph
-    # Both stand on the same ground line, which is the only thing the two
-    # canvases agree on and so the only sane anchor.
+    # The two are anchored on the ground line and on their shared weight,
+    # so the one arriving is already standing where it will be left and
+    # neither of them moves at any point in the dissolve.
     into_oy = oy + pet.h - into.h * pet.px_of(into)
-    for c, o, pts in ((ch, oy, morph_keep(sprite_pixels(pet, ch), p, True)),
-                      (into, into_oy, morph_keep(sprite_pixels(pet, into), p, False))):
-        paint_sprite(cr, pet, c, o, pts)
+    into_ox = pet.morph_shift()
+    for c, o, dx, pts in ((ch, oy, 0.0, morph_keep(sprite_pixels(pet, ch), p, True)),
+                          (into, into_oy, into_ox,
+                           morph_keep(sprite_pixels(pet, into), p, False))):
+        paint_sprite(cr, pet, c, o, pts, dx)
 
 
 def draw_bubble(cr, pet, oy, width):

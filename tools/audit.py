@@ -1027,8 +1027,15 @@ sw.set_flags(Gio.ApplicationFlags.NON_UNIQUE); sw.register()
 m.visible = True; m._on_swap.clear(); sw.do_activate()
 sw.pet.place(1920, 1080); sw.pet.present_until = 1e9
 sw.pet.seen = {"a-tip", "another"}              # tips he has already spent
-was = (sw.pet.character.name, sw.pet.x, sw.pet.y + sw.pet.h, sw.pet.dir, sw.pet.snooze_until, sw.pet.px)
-was_home, was_seen = (sw.pet.home_x, sw.pet.home_y + sw.pet.h), set(sw.pet.seen)
+# the spot is where he looks like he is: x plus where that character's
+# weight sits across its canvas. The two canvases are 96 and 112 wide and
+# their weight is not in the same place in either, so holding x is what
+# moves him, not what keeps him still.
+def spot(q):
+    return round(q.x + q.middle_of(q.character), 1)
+was = (sw.pet.character.name, spot(sw.pet), sw.pet.y + sw.pet.h, sw.pet.dir, sw.pet.snooze_until, sw.pet.px)
+was_home, was_seen = (round(sw.pet.home_x + sw.pet.middle_of(sw.pet.character), 1),
+                      sw.pet.home_y + sw.pet.h), set(sw.pet.seen)
 m.request_swap()                                # exactly what the signal calls
 seen_poses = []; keys = {sw.pet.render_key()[-1]}; morph_keys = []
 for _ in range(120):                            # the dissolve, then the laptop opening
@@ -1038,12 +1045,13 @@ for _ in range(120):                            # the dissolve, then the laptop 
     time.sleep(0.02)
     if sw.pet.character.name != was[0] and sw.pet.view == sw.pet.character.turn[0]:
         break
-now_ = (sw.pet.character.name, sw.pet.x, sw.pet.y + sw.pet.h, sw.pet.dir, sw.pet.snooze_until, sw.pet.px)
-kept = ((sw.pet.home_x, sw.pet.home_y + sw.pet.h) == was_home and set(sw.pet.seen) == was_seen)
+now_ = (sw.pet.character.name, spot(sw.pet), sw.pet.y + sw.pet.h, sw.pet.dir, sw.pet.snooze_until, sw.pet.px)
+kept = ((round(sw.pet.home_x + sw.pet.middle_of(sw.pet.character), 1),
+         sw.pet.home_y + sw.pet.h) == was_home and set(sw.pet.seen) == was_seen)
 saved = m.read_state().get("sprite")
 again = m.Pet(types.SimpleNamespace(**dict(vars(O), scale=None, sprite=m.sprite_choice(None))), m.KNOWLEDGE)
 flagged = m.sprite_choice("yoru"); flagged_saved = m.read_state().get("sprite")
-ck("63 the swap dissolves one character into the other in a running app, same spot, feet on the ground, same facing; the snooze, the home and the tips he has spent come through it; it persists",
+ck("63 the swap dissolves one character into the other in a running app: his weight stays where it was, his feet stay on the ground, he faces the same way; the snooze, the home and the tips he has spent come through it; it persists",
    was[0] == "yoru" and now_[0] == "dane" and now_[1:5] == was[1:5] and (was[5], now_[5]) == (4, 2)
    and "morph" in seen_poses and "settle" not in seen_poses and seen_poses[-1] == "stand"
    and keys == {"yoru", "yoru>dane", "dane"} and kept and saved == "dane"
@@ -1345,11 +1353,22 @@ def one_swap(start, snoozed=False, secs=3.0):
     q.step(DTS, t, 1920, 1080)
     if snoozed:
         q.snooze_until = 1e9
-    before = (q.x, q.dir, q.y + q.h, q.home_x, set(q.seen), q.snooze_until)
+    before = (round(q.x + q.middle_of(q.character), 1), q.dir, q.y + q.h,
+              round(q.home_x + q.middle_of(q.character), 1), set(q.seen), q.snooze_until)
     q.request_swap()
     rows = []
     for _ in range(int(secs / DTS)):
         t += DTS; q.step(DTS, t, 1920, 1080)
+        # where the drawn mass sits this frame, both of them together
+        xs, n = 0.0, 0
+        for c, dx, keep in ((q.character, 0.0, True), (q.morph, q.morph_shift(), False)):
+            if c is None:
+                continue
+            pts = m.sprite_pixels(q, c)
+            if q.morph is not None:
+                pts = m.morph_keep(pts, q.morph_progress(), keep)
+            pc = q.px_of(c)
+            xs += sum(q.x + dx + (x + .5) * pc for x, _, _ in pts); n += len(pts)
         mix = None
         if q.pose == "morph":
             p = q.morph_progress()
@@ -1360,8 +1379,10 @@ def one_swap(start, snoozed=False, secs=3.0):
                    {c for _, _, c in out_all} | {c for _, _, c in in_all},
                    q.px_of(q.character), q.px_of(q.morph),
                    q.y + q.h, q.y + q.h)          # both stand on the same line
-        rows.append((q.pose, q.view, q.character, q.morph, mix, q.render_key()))
-    after = (q.x, q.dir, q.y + q.h, q.home_x, set(q.seen), q.snooze_until)
+        rows.append((q.pose, q.view, q.character, q.morph, mix, q.render_key(),
+                     xs / max(1, n)))
+    after = (round(q.x + q.middle_of(q.character), 1), q.dir, q.y + q.h,
+             round(q.home_x + q.middle_of(q.character), 1), set(q.seen), q.snooze_until)
     return q, before, after, rows
 
 bad = []; report = []
@@ -1408,9 +1429,19 @@ for start, other in (("yoru", "dane"), ("dane", "yoru")):
         bad.append((start, "they did not share the ground line"))
     if before[:4] != after[:4] or before[4] != after[4]:
         bad.append((start, "something was lost: %s -> %s" % (before, after)))
-    report.append("%s->%s %d frames/%.2fs, door to door %.2fs, middle %d%%/%d%%, %dpx and %dpx"
+    # And he does not slide. Anchoring the two canvases by their left edges
+    # walked the visible mass ten pixels sideways every swap, in whichever
+    # direction the wider one lay; what is left is the scatter itself,
+    # which wanders a pixel or two and does not go anywhere.
+    seen_x = [r[6] for r in rows]
+    wander = max(seen_x) - min(seen_x)
+    net = seen_x[-1] - seen_x[0]
+    if wander > 4.0 or abs(net) > 1.0:
+        bad.append((start, "he slid: net %+.1f px, wander %.1f" % (net, wander)))
+    report.append("%s->%s %d frames/%.2fs, door to door %.2fs, middle %d%%/%d%%, "
+                  "%dpx and %dpx, mass net %+.1f px (wander %.1f)"
                   % (start, other, len(mo), held, door, mid[0] * 100, mid[1] * 100,
-                     first[4], first[5]))
+                     first[4], first[5], net, wander))
 # and snoozed he still changes: he stands up for it and lies back down
 qs, before_s, after_s, rows_s = one_swap("dane", snoozed=True, secs=4.0)
 slept = [r[0] for r in rows_s]
@@ -1418,7 +1449,7 @@ snoozed_ok = (before_s[5] == after_s[5] == 1e9 and "morph" in slept
               and slept[-1] == "rest" and qs.character.name == "yoru")
 if not snoozed_ok:
     bad.append(("snoozed", "%s, ended %s as %s" % ("morph" in slept, slept[-1], qs.character.name)))
-ck("71 the dissolve: about half a second of it, the whole swap under one, every frame of it drawn, a real mix of the two in the middle at their own pixel sizes on one ground line; nothing blended, nothing lost; snoozed, he stands up to change and lies back down",
+ck("71 the dissolve: about half a second of it, the whole swap under one, every frame of it drawn, a real mix of the two in the middle at their own pixel sizes on one ground line and one centre so he never slides; nothing blended, nothing lost; snoozed, he stands up to change and lies back down",
    not bad,
    "%s; snoozed: he changed %s and ended %s" % ("; ".join(report) or "nothing ran",
                                                 snoozed_ok, slept[-1] if slept else "?")

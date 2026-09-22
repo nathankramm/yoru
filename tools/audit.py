@@ -1424,4 +1424,59 @@ ck("71 the dissolve: about half a second of it, the whole swap under one, every 
                                                 snoozed_ok, slept[-1] if slept else "?")
    + ("; WRONG: %s" % (bad[:3],) if bad else ""))
 sw.stop(); sw.win.destroy()
+# The three places a user is told what to put in their Hyprland config:
+# install.sh, which writes it; yoru.install, which prints it because a
+# package must not write it; and the README's by-hand block, for anyone who
+# wants to see each step. They are three copies of the same two lines and
+# they drift -- the swap key was added to the first and the third and
+# stayed out of the second for a release, so everyone who installed through
+# pacman was never told Super + Ctrl + Shift + Y existed, which for a
+# keybinding is the same as it not existing. This is the check that would
+# have caught it, and it will catch the next one.
+#
+# The path is allowed to differ and has to: ~/.local/bin/yoru from the
+# script, /usr/bin/yoru from the package, a spelled-out home in the README.
+# The key, the label and the signal are not allowed to.
+root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+def shipped(name):
+    """The file with its shell escaping undone, and install.sh's $bin
+    expanded to the path it holds -- otherwise the one copy that is written
+    by a script rather than printed looks like it names no binary at all."""
+    text = open(os.path.join(root, name)).read().replace('\\"', '"').replace("\\$", "$")
+    var = re.search(r'^bin="([^"]+)"', text, re.M)
+    return text.replace("$bin", var.group(1)) if var else text
+BIND = re.compile(r'''o\.bind\("([^"]+)",\s*"([^"]+)",\s*"pkill -(\S+) -f '([^']+)'"\)''')
+LAUNCH = re.compile(r'o\.launch_on_start\("([^"]+)"\)')
+inst, pkg, doc = shipped("install.sh"), shipped("yoru.install"), shipped("README.md")
+# post_install is the one that has to be complete; post_upgrade may mention
+# a subset, and does -- it tells people upgrading about the new key only.
+pkg_install, _, pkg_upgrade = pkg.partition("post_upgrade()")
+# the README's by-hand block is the fenced lua that has binds in it
+doc_block = next((b for b in re.findall(r"```lua\n(.*?)```", doc, re.S) if "o.bind(" in b), "")
+doc_launch = next((b for b in re.findall(r"```lua\n(.*?)```", doc, re.S) if "launch_on_start" in b), "")
+where = {"install.sh": inst, "yoru.install (post_install)": pkg_install,
+         "README by-hand block": doc_block}
+binds = {k: BIND.findall(v) for k, v in where.items()}
+keys = {k: {(b[0], b[1], b[2]) for b in v} for k, v in binds.items()}
+agreed = set.intersection(*keys.values()) if all(keys.values()) else set()
+drift = {k: sorted(v ^ agreed) for k, v in keys.items() if v != agreed}
+# every pattern keeps the boundary that stops pkill reaching an editor with
+# the file open, and names a yoru binary
+loose = [(k, b[3]) for k, v in binds.items() for b in v
+         if not b[3].endswith("( |$)") or "yoru" not in b[3]]
+# the launch line is the same story and drifts the same way
+launched = {k: bool(LAUNCH.search(v)) for k, v in
+            (("install.sh", inst), ("yoru.install", pkg_install),
+             ("README", doc_launch))}
+# and a signal nobody handles is as useless as a key nobody is told about
+handled = set(re.findall(r"signal\.SIG(\w+)", src)) & {"USR1", "USR2", "USR3"}
+signalled = {b[2].lstrip("-") for v in binds.values() for b in v}
+extra = sorted(signalled - handled) + sorted(handled - signalled)
+ck("72 install.sh, yoru.install and the README's by-hand block tell you to bind the same keys to the same signals, every pattern keeps its word boundary, and every signal is one he handles",
+   not drift and not loose and all(launched.values()) and not extra and len(agreed) >= 2,
+   "%d bindings agreed on (%s); drift %s; patterns without the boundary %s; launch line present %s; signals bound %s, handled %s" % (
+       len(agreed), ", ".join("%s->%s" % (k[0], k[2]) for k in sorted(agreed)) or "none",
+       drift or "none", loose or "none",
+       ", ".join(k for k, v in launched.items() if v) or "nowhere",
+       sorted(signalled) or "none", sorted(handled)))
 print("\n%d/%d  FAILURES: %s" % (N - len(F), N, F or "none"))

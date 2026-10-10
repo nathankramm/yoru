@@ -816,6 +816,9 @@ real_apply, real_read, real_refresh = m.apply_theme, m.read_theme, m.refresh_sup
 m.apply_theme = lambda: (calls.__setitem__("apply", calls["apply"] + 1) or real_apply())
 m.read_theme = lambda: (calls.__setitem__("read", calls["read"] + 1) or real_read())
 m.refresh_suppressed = lambda tips: (calls.__setitem__("refresh", calls["refresh"] + 1) or real_refresh(tips))
+# the real one keeps its state on itself, read through the module global --
+# which is now this wrapper; a compositor with no binds would find it bare
+m.refresh_suppressed.blind = False
 nt = m.build_app(types.SimpleNamespace(**dict(vars(O), no_theme=True, no_context=True, quiet=True,
                                                start_hidden=True, layer="overlay", monitor=None, topics="")),
                  m.KNOWLEDGE)
@@ -1510,4 +1513,84 @@ ck("72 install.sh, yoru.install and the README's by-hand block tell you to bind 
        drift or "none", loose or "none",
        ", ".join(k for k, v in launched.items() if v) or "nowhere",
        sorted(signalled) or "none", sorted(handled)))
+# The input region. --start-hidden mapped a layer surface anchored to all
+# four edges and never set a region on it, because only tick() did and a
+# hidden deer does not tick: the compositor's default is the whole surface,
+# so every click on the desktop went to a deer nobody could see. Toggling
+# hidden after a normal start was fine, which is why it went unnoticed.
+# Recorded at the surface, on real apps that really map: every region any
+# surface of his is given, with whether he was drawn at that moment. The
+# rule is one line -- nothing drawn, nothing caught -- and it has to hold
+# from the first commit, which is why the first region must land before
+# the surface is mapped, not on the first frame after.
+from gi.repository import Gdk as _Gdk
+real_set_region = _Gdk.Surface.set_input_region
+regions = []                    # (app, mapped, drawn, rect or None)
+building = [None]               # the app under test; only its own surface counts
+def recording(surface, region):
+    a = building[0]
+    if a is not None and getattr(a, "win", None) is not None and a.win.get_surface() == surface:
+        e = region.get_extents()
+        regions.append((a, surface.get_mapped(), m.visible and a.pet.placed,
+                        None if region.is_empty() else (e.x, e.y, e.width, e.height)))
+    return real_set_region(surface, region)
+_Gdk.Surface.set_input_region = recording
+def spin(secs):
+    loop, end = m.GLib.MainContext.default(), time.monotonic() + secs
+    while time.monotonic() < end: loop.iteration(False); time.sleep(0.01)
+def region_app(hidden, name):
+    a = m.build_app(types.SimpleNamespace(**dict(vars(O), scale=None, no_theme=True, no_context=True,
+                    quiet=True, start_hidden=hidden, layer="overlay", monitor=None, topics="",
+                    sprite="yoru")), m.KNOWLEDGE)
+    a.set_application_id("dev.local.yoru.audit." + name)
+    a.set_flags(Gio.ApplicationFlags.NON_UNIQUE); a.register()
+    m.visible = not hidden; m._on_visibility.clear(); m._on_swap.clear()
+    building[0] = a
+    a.do_activate(); spin(0.6)
+    a.pet.present_until = 1e9; a.pet.next_roam = 1e9   # he stands still while we look
+    return a
+def last(a): return next((r[3] for r in reversed(regions) if r[0] is a), "never set")
+def first(a): return next((r for r in regions if r[0] is a), None)
+rg = []
+# started hidden: set before it maps, empty, and stays empty
+hs = region_app(True, "hidden")
+f = first(hs)
+if f is None or f[1]:
+    rg.append("started hidden: first region %s" % ("never set -- the whole surface takes input" if f is None
+                                                  else "only after the surface mapped"))
+if last(hs) is not None:
+    rg.append("started hidden: region %s" % (last(hs),))
+# shown, it follows him -- and moves when he does
+m.toggle_visible(); spin(0.6)
+if last(hs) != hs.pet.bounds():
+    rg.append("shown after a hidden start: region %s, he is at %s" % (last(hs), hs.pet.bounds()))
+hs.pet.x -= 120; hs.pet.home_x = hs.pet.x; spin(0.3)
+if last(hs) != hs.pet.bounds():
+    rg.append("moved: region %s, he is at %s" % (last(hs), hs.pet.bounds()))
+followed = last(hs)
+# hidden again, and a resize while hidden does not hand the default back
+m.toggle_visible(); spin(0.3)
+if last(hs) is not None:
+    rg.append("hidden again: region %s" % (last(hs),))
+hs.win.get_surface().emit("layout", 1, 1); spin(0.1)
+if last(hs) is not None:
+    rg.append("resized while hidden: region %s" % (last(hs),))
+hs.stop(); hs.win.destroy()
+# a normal start: nothing before he is placed, then him
+vs = region_app(False, "shown")
+f = first(vs)
+if f is None or f[1] or f[3] is not None:
+    rg.append("normal start: first region %s" % (f and (f[1], f[3]),))
+if last(vs) != vs.pet.bounds():
+    rg.append("normal start: region %s, he is at %s" % (last(vs), vs.pet.bounds()))
+vs.stop(); vs.win.destroy()
+# and at no moment, on either, a region while nothing of him was drawn
+caught = [(r[0] is hs and "hidden-start" or "normal", r[3]) for r in regions
+          if not r[2] and r[3] is not None]
+_Gdk.Surface.set_input_region = real_set_region
+building[0] = None; m.visible = True
+ck("73 started hidden, the input region is empty from before the first commit; shown, it is his bounds and follows him; hidden again or resized while hidden, empty; and no surface of his is ever given a region while nothing of him is drawn",
+   not rg and not caught and len(regions) >= 6,
+   "%d regions set across a hidden and a normal start; followed him to %s" % (len(regions), followed)
+   + ("; WRONG: %s" % (rg[:3],) if rg else "") + ("; caught clicks undrawn: %s" % (caught[:3],) if caught else ""))
 print("\n%d/%d  FAILURES: %s" % (N - len(F), N, F or "none"))

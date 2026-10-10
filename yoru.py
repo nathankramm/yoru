@@ -3446,6 +3446,14 @@ def build_app(opts, tips):
                     debug("theme: %s at start (%s)", _theme_label(),
                           "applied" if themed else "unreadable, built-in palette")
                 self._theme_stamp = theme_stamp()
+            # The surface exists from realize, before its first commit, and
+            # that is where the input region has to start: a layer surface
+            # anchored to all four edges takes the whole monitor's input by
+            # default, and --start-hidden never ticks to replace it. That
+            # was every click on the desktop gone to a deer nobody could see.
+            # Every size change re-applies it too, so a monitor coming or
+            # going cannot hand the default back.
+            win.connect("realize", self.on_realize)
             win.present()
             if not read_state().get("introduced"):
                 GLib.timeout_add_seconds(4, self.intro)
@@ -3503,10 +3511,30 @@ def build_app(opts, tips):
                 self.start()
             else:
                 self.stop()
-            surface = self.win.get_surface()
-            if surface is not None and not shown:
-                surface.set_input_region(cairo.Region())
+            self.sync_input_region()
             self.area.queue_draw()
+
+        # -- input region ------------------------------------------------
+        # One rule, in one place, for every path that touches it: the region
+        # is his bounds while he is drawn, and empty otherwise -- hidden,
+        # however he got there, or not yet placed on the canvas. A surface
+        # of his never takes a click where nothing of him is.
+        def input_rect(self):
+            if not visible or not self.pet.placed:
+                return None
+            return self.pet.bounds()
+
+        def sync_input_region(self, *_):
+            surface = self.win.get_surface()
+            if surface is None:
+                return
+            rect = self.input_rect()
+            surface.set_input_region(cairo.Region() if rect is None else
+                                     cairo.Region(cairo.RectangleInt(*rect)))
+
+        def on_realize(self, win):
+            self.sync_input_region()
+            win.get_surface().connect("layout", self.sync_input_region)
 
         # -- input -------------------------------------------------------
         def on_click(self, gesture, n_press, x, y):
@@ -3661,13 +3689,8 @@ def build_app(opts, tips):
                 return True             # same pixels as last frame; no draw
             if (self._key is None or key[:2] != self._key[:2]
                     or key[-1] != self._key[-1]):     # moved, or a new canvas
-                surface = self.win.get_surface()
-                if surface is not None:
-                    # The input region follows him, and nothing else. Hidden
-                    # is handled in set_visible: an empty region hands every
-                    # click to whatever is underneath, not to an invisible deer.
-                    surface.set_input_region(cairo.Region(
-                        cairo.RectangleInt(*self.pet.bounds())))
+                # The input region follows him, and nothing else.
+                self.sync_input_region()
             self._key = key
             self.area.queue_draw()
             return True
@@ -3683,6 +3706,7 @@ def build_app(opts, tips):
 
             if not self.pet.placed:
                 self.pet.place(width, height)
+                self.sync_input_region()
             draw_sprite(cr, self.pet, self.pet.y)
             if self.pet.text:
                 cr.set_antialias(cairo.ANTIALIAS_DEFAULT)

@@ -595,7 +595,20 @@ precisely the predatory quality that made Clippy hated.
 - [gtk4-layer-shell][gls] by William Wold
 - Clippit, designed by Kevan Atteberry, 1997
 
-Built with [Claude][claude].
+## How this was built
+
+I chose the problem and wrote the spec. Claude Code wrote most of the code.
+
+There is no unit-test suite and no CI. What checks him is in `tools/`:
+
+- `audit.py`: 73 checks of how he behaves, among them the hide toggle, the cadence, the flags,
+  his facing and gaits, and both characters drawn legibly in every shipped theme.
+  `release.sh` will not tag a release unless every check passes.
+- `verify-tips.py` and `stock-binds.lua` hold each keybinding tip against the installed
+  Omarchy files and your live `hyprctl binds`, not against the manual. The tips were checked
+  this way against Omarchy 4.0.3 and again against 4.0.4.
+- Poses and motion are judged by eye, from renders made by the code that draws them
+  (`render-poses.py`, `render-demo.py`).
 
 ## License
 
@@ -611,4 +624,3 @@ MIT. Take it and run.
 [lo]: https://github.com/DanWahlin/learn-omarchy
 [omarchy]: https://github.com/omacom/omarchy
 [gls]: https://github.com/wmww/gtk4-layer-shell
-[claude]: https://claude.ai
